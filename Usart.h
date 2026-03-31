@@ -20,6 +20,8 @@ extern "C" {
 #include "Usart_Types.h"                    /* Module types definition        */
 /* ============================= TYPEDEFS =================================== */
 
+typedef USART_TypeDef usart_PeriphRegAddr_t;
+
 /* ========================= SYMBOLIC CONSTANTS ============================= */
 
 #define USART_DE_ASSERT_MAX_VALUE               ( 31u )
@@ -29,7 +31,6 @@ extern "C" {
 /* ========================= EXPORTED VARIABLES ============================= */
 
 /* ======================== EXPORTED FUNCTIONS ============================== */
-
 
 /**
  * \brief Calculation of assertion and de-assertion values of Driver Enable (DE) pin

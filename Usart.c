@@ -2,34 +2,36 @@
  * \author Mr.Nobody
  * \file Usart.h
  * \ingroup Usart
- * \brief Usart module common functionality
+ * \brief UART/USART module common functionality
  *
  */
 /* ============================== INCLUDES ================================== */
 #include "Usart.h"                          /* Self include                   */
+#include "Usart_CommDma.h"                  /* DMA communication handler      */
+#include "Usart_CommInt.h"                  /* Interrupt communication handler*/
+#include "Usart_CommPoll.h"                 /* Polling communication handler  */
 #include "Usart_Port.h"                     /* Own port file include          */
 #include "Usart_Types.h"                    /* Module types definitions       */
 #include "Stm32_usart.h"                    /* USART RAL functionality        */
 #include "Rcc_Port.h"                       /* RCC port functionality         */
-#include "Nvic_Port.h"                      /* Nvic port functionality        */
-#include "Gpio_Port.h"                      /* Gpio port functionality        */
-//#include "Dma_Port.h"                       /* Dma port functionality         */
+#include "Nvic_Port.h"                      /* NVIC port functionality        */
+#include "Gpio_Port.h"                      /* GPIO port functionality        */
 /* ============================== TYPEDEFS ================================== */
 
 /** Structure type used for USART/UART configuration array */
 typedef struct
 {
-    USART_TypeDef*       UsartReg;  /**< USART configuration register */
-    rcc_PeriphId_t       UsartRcc;  /**< USART RCC configuration ID   */
-    nvic_PeriphIrqList_t UsartNvic; /**< USART NVIC configuration ID  */
-    nvic_IsrCallback_t   UsartIsr;  /**< USART ISR callback routines  */
+    usart_PeriphRegAddr_t* UsartReg;  /**< USART configuration register */
+    rcc_PeriphId_t         UsartRcc;  /**< USART RCC configuration ID   */
+    nvic_PeriphIrqList_t   UsartNvic; /**< USART NVIC configuration ID  */
+    nvic_IsrCallback_t     UsartIsr;  /**< USART ISR callback routines  */
 }   usart_ConfigStruct_t;
 
 /** Structure type used to store users USART/UART ISR callback pointers */
 typedef struct
 {
-    usart_BusId_t              UsartPeriphId;
-    usart_TransferStyle_t         TransferStyle;
+    usart_PeriphId_t                 UsartPeriphId;
+    usart_XferStyle_t         TransferStyle;
     usart_RxNeIrqCallback_t      *RxNotEmptyIsr;
     usart_ErrIrqCallback_t       *ErrorIsr;
     usart_TxeIrqCallback_t       *TxEmptyIsr;
@@ -45,7 +47,7 @@ typedef struct
     gpio_PinId_t       GpioRxPinId;
     gpio_PortId_t      GpioRxPortId;
     gpio_AltFunction_t GpioRxAltFunctionId;
-    usart_BusId_t      BusId;
+    usart_PeriphId_t      BusId;
     usart_RxPin_t      RxPinId;
 }   usart_GpioRxPinConfig_t;
 
@@ -56,7 +58,7 @@ typedef struct
     gpio_PinId_t       GpioTxPinId;
     gpio_PortId_t      GpioTxPortId;
     gpio_AltFunction_t GpioTxAltFunctionId;
-    usart_BusId_t      BusId;
+    usart_PeriphId_t      BusId;
     usart_TxPin_t      TxPinId;
 }   usart_GpioTxPinConfig_t;
 
@@ -67,7 +69,7 @@ typedef struct
     gpio_PinId_t       GpioDePinId;
     gpio_PortId_t      GpioDePortId;
     gpio_AltFunction_t GpioDeAltFunctionId;
-    usart_BusId_t      BusId;
+    usart_PeriphId_t      BusId;
     usart_DePin_t      DePinId;
 }   usart_GpioDePinConfig_t;
 
@@ -98,10 +100,10 @@ static void Uart_Usart4_IsrHandler(void);
 static void Uart_Usart5_IsrHandler(void);
 #endif /* UART5 */
 
-static inline void Usart_GlobalIsrHandler( usart_BusId_t usartId );
+static inline void Usart_GlobalIsrHandler( usart_PeriphId_t usartId );
 
-static usart_RequestState_t Usart_Set_Prescaler( usart_BusId_t usartId, usart_Prescaler_t prescaler );
-static usart_RequestState_t Usart_Get_Prescaler( usart_BusId_t usartId, usart_Prescaler_t *prescaler );
+static usart_RequestState_t Usart_Set_Prescaler( usart_PeriphId_t usartId, usart_Prescaler_t prescaler );
+static usart_RequestState_t Usart_Get_Prescaler( usart_PeriphId_t usartId, usart_Prescaler_t *prescaler );
 
 /* ========================== SYMBOLIC CONSTANTS ============================ */
 
@@ -129,30 +131,30 @@ static usart_RequestState_t Usart_Get_Prescaler( usart_BusId_t usartId, usart_Pr
 /** USART/UART peripherals runtime data array */
 static volatile usart_IsrCallback_t     usart_RuntimeData[ USART_BUS_CNT ] =
 {
-    { .UsartPeriphId = USART_BUS_1 , .TransferStyle = USART_TRANSFER_BLOCKING , .RxNotEmptyIsr = USART_NULL_PTR , .ErrorIsr = USART_NULL_PTR , .TxEmptyIsr = USART_NULL_PTR , .TransferCompleteIsr = USART_NULL_PTR , .IdleIsr = USART_NULL_PTR , .RxTimeoutIsr = USART_NULL_PTR },
-    { .UsartPeriphId = USART_BUS_2 , .TransferStyle = USART_TRANSFER_BLOCKING , .RxNotEmptyIsr = USART_NULL_PTR , .ErrorIsr = USART_NULL_PTR , .TxEmptyIsr = USART_NULL_PTR , .TransferCompleteIsr = USART_NULL_PTR , .IdleIsr = USART_NULL_PTR , .RxTimeoutIsr = USART_NULL_PTR },
-    { .UsartPeriphId = USART_BUS_3 , .TransferStyle = USART_TRANSFER_BLOCKING , .RxNotEmptyIsr = USART_NULL_PTR , .ErrorIsr = USART_NULL_PTR , .TxEmptyIsr = USART_NULL_PTR , .TransferCompleteIsr = USART_NULL_PTR , .IdleIsr = USART_NULL_PTR , .RxTimeoutIsr = USART_NULL_PTR },
-    { .UsartPeriphId = USART_BUS_4 , .TransferStyle = USART_TRANSFER_BLOCKING , .RxNotEmptyIsr = USART_NULL_PTR , .ErrorIsr = USART_NULL_PTR , .TxEmptyIsr = USART_NULL_PTR , .TransferCompleteIsr = USART_NULL_PTR , .IdleIsr = USART_NULL_PTR , .RxTimeoutIsr = USART_NULL_PTR },
-    { .UsartPeriphId = USART_BUS_5 , .TransferStyle = USART_TRANSFER_BLOCKING , .RxNotEmptyIsr = USART_NULL_PTR , .ErrorIsr = USART_NULL_PTR , .TxEmptyIsr = USART_NULL_PTR , .TransferCompleteIsr = USART_NULL_PTR , .IdleIsr = USART_NULL_PTR , .RxTimeoutIsr = USART_NULL_PTR },
+    { .UsartPeriphId = USART_PERIPH_1 , .TransferStyle = USART_XFER_BLOCKING , .RxNotEmptyIsr = USART_NULL_PTR , .ErrorIsr = USART_NULL_PTR , .TxEmptyIsr = USART_NULL_PTR , .TransferCompleteIsr = USART_NULL_PTR , .IdleIsr = USART_NULL_PTR , .RxTimeoutIsr = USART_NULL_PTR },
+    { .UsartPeriphId = USART_PERIPH_2 , .TransferStyle = USART_XFER_BLOCKING , .RxNotEmptyIsr = USART_NULL_PTR , .ErrorIsr = USART_NULL_PTR , .TxEmptyIsr = USART_NULL_PTR , .TransferCompleteIsr = USART_NULL_PTR , .IdleIsr = USART_NULL_PTR , .RxTimeoutIsr = USART_NULL_PTR },
+    { .UsartPeriphId = USART_PERIPH_3 , .TransferStyle = USART_XFER_BLOCKING , .RxNotEmptyIsr = USART_NULL_PTR , .ErrorIsr = USART_NULL_PTR , .TxEmptyIsr = USART_NULL_PTR , .TransferCompleteIsr = USART_NULL_PTR , .IdleIsr = USART_NULL_PTR , .RxTimeoutIsr = USART_NULL_PTR },
+    { .UsartPeriphId = USART_PERIPH_4 , .TransferStyle = USART_XFER_BLOCKING , .RxNotEmptyIsr = USART_NULL_PTR , .ErrorIsr = USART_NULL_PTR , .TxEmptyIsr = USART_NULL_PTR , .TransferCompleteIsr = USART_NULL_PTR , .IdleIsr = USART_NULL_PTR , .RxTimeoutIsr = USART_NULL_PTR },
+    { .UsartPeriphId = USART_PERIPH_5 , .TransferStyle = USART_XFER_BLOCKING , .RxNotEmptyIsr = USART_NULL_PTR , .ErrorIsr = USART_NULL_PTR , .TxEmptyIsr = USART_NULL_PTR , .TransferCompleteIsr = USART_NULL_PTR , .IdleIsr = USART_NULL_PTR , .RxTimeoutIsr = USART_NULL_PTR },
 };
 
 /** USART/UART peripherals configuration array */
 static usart_ConfigStruct_t const       usart_PeriphConf[ USART_BUS_CNT ] =
 {
 #ifdef USART1
-    { .UsartReg = USART1, .UsartRcc = RCC_PERIPH_USART1, .UsartNvic = NVIC_PERIPH_IRQ_USART1, .UsartIsr = Usart_Usart1_IsrHandler },
+    { .UsartReg = USART1, .UsartRcc = RCC_PERIPH_USART1_APB1, .UsartNvic = NVIC_PERIPH_IRQ_USART1, .UsartIsr = Usart_Usart1_IsrHandler },
 #endif
 #ifdef USART2
-    { .UsartReg = USART2, .UsartRcc = RCC_PERIPH_USART2, .UsartNvic = NVIC_PERIPH_IRQ_USART2, .UsartIsr = Usart_Usart2_IsrHandler },
+    { .UsartReg = USART2, .UsartRcc = RCC_PERIPH_USART2_APB1, .UsartNvic = NVIC_PERIPH_IRQ_USART2, .UsartIsr = Usart_Usart2_IsrHandler },
 #endif
 #ifdef USART3
-    { .UsartReg = USART3, .UsartRcc = RCC_PERIPH_USART3, .UsartNvic = NVIC_PERIPH_IRQ_USART3, .UsartIsr = Usart_Usart3_IsrHandler },
+    { .UsartReg = USART3, .UsartRcc = RCC_PERIPH_USART3_APB1, .UsartNvic = NVIC_PERIPH_IRQ_USART3, .UsartIsr = Usart_Usart3_IsrHandler },
 #endif
 #ifdef UART4
-    { .UsartReg = UART4,  .UsartRcc = RCC_PERIPH_UART4,  .UsartNvic = NVIC_PERIPH_IRQ_UART4,  .UsartIsr = Uart_Usart4_IsrHandler  },
+    { .UsartReg = UART4,  .UsartRcc = RCC_PERIPH_UART4_APB1,  .UsartNvic = NVIC_PERIPH_IRQ_UART4,  .UsartIsr = Uart_Usart4_IsrHandler  },
 #endif
 #ifdef UART5
-    { .UsartReg = UART5,  .UsartRcc = RCC_PERIPH_UART5,  .UsartNvic = NVIC_PERIPH_IRQ_UART5,  .UsartIsr = Uart_Usart5_IsrHandler  },
+    { .UsartReg = UART5,  .UsartRcc = RCC_PERIPH_UART5_APB1,  .UsartNvic = NVIC_PERIPH_IRQ_UART5,  .UsartIsr = Uart_Usart5_IsrHandler  },
 #endif
 };
 
@@ -161,77 +163,77 @@ static usart_GpioConfig_t const        usart_GpioConfig =
 {
   .GpioRxConfig = {
 #ifdef USART1
-    { .RxPinId = USART_RX_PIN_BUS1_PA10, .GpioRxPinId = GPIO_PIN_ID_10, .GpioRxPortId = GPIO_PORT_A, .GpioRxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_1 },
-    { .RxPinId = USART_RX_PIN_BUS1_PB7 , .GpioRxPinId = GPIO_PIN_ID_7 , .GpioRxPortId = GPIO_PORT_B, .GpioRxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_1 },
-    { .RxPinId = USART_RX_PIN_BUS1_PG10, .GpioRxPinId = GPIO_PIN_ID_10, .GpioRxPortId = GPIO_PORT_G, .GpioRxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_1 },
+    { .RxPinId = USART_RX_PIN_BUS1_PA10, .GpioRxPinId = GPIO_PIN_ID_10, .GpioRxPortId = GPIO_PORT_A, .GpioRxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_1 },
+    { .RxPinId = USART_RX_PIN_BUS1_PB7 , .GpioRxPinId = GPIO_PIN_ID_7 , .GpioRxPortId = GPIO_PORT_B, .GpioRxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_1 },
+    { .RxPinId = USART_RX_PIN_BUS1_PG10, .GpioRxPinId = GPIO_PIN_ID_10, .GpioRxPortId = GPIO_PORT_G, .GpioRxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_1 },
 #endif
 #ifdef USART2
-    { .RxPinId = USART_RX_PIN_BUS2_PA3 , .GpioRxPinId = GPIO_PIN_ID_3 , .GpioRxPortId = GPIO_PORT_A, .GpioRxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_2 },
-    { .RxPinId = USART_RX_PIN_BUS2_PA15, .GpioRxPinId = GPIO_PIN_ID_15, .GpioRxPortId = GPIO_PORT_A, .GpioRxAltFunctionId = GPIO_ALT_FUNC_3, .BusId = USART_BUS_2 },
-    { .RxPinId = USART_RX_PIN_BUS2_PD6 , .GpioRxPinId = GPIO_PIN_ID_6 , .GpioRxPortId = GPIO_PORT_D, .GpioRxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_2 },
+    { .RxPinId = USART_RX_PIN_BUS2_PA3 , .GpioRxPinId = GPIO_PIN_ID_3 , .GpioRxPortId = GPIO_PORT_A, .GpioRxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_2 },
+    { .RxPinId = USART_RX_PIN_BUS2_PA15, .GpioRxPinId = GPIO_PIN_ID_15, .GpioRxPortId = GPIO_PORT_A, .GpioRxAltFunctionId = GPIO_ALT_FUNC_3, .BusId = USART_PERIPH_2 },
+    { .RxPinId = USART_RX_PIN_BUS2_PD6 , .GpioRxPinId = GPIO_PIN_ID_6 , .GpioRxPortId = GPIO_PORT_D, .GpioRxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_2 },
 #endif
 #ifdef USART3
-    { .RxPinId = USART_RX_PIN_BUS3_PB11, .GpioRxPinId = GPIO_PIN_ID_11, .GpioRxPortId = GPIO_PORT_B, .GpioRxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_3 },
-    { .RxPinId = USART_RX_PIN_BUS3_PC5 , .GpioRxPinId = GPIO_PIN_ID_5 , .GpioRxPortId = GPIO_PORT_C, .GpioRxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_3 },
-    { .RxPinId = USART_RX_PIN_BUS3_PC11, .GpioRxPinId = GPIO_PIN_ID_11, .GpioRxPortId = GPIO_PORT_C, .GpioRxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_3 },
-    { .RxPinId = USART_RX_PIN_BUS3_PD9 , .GpioRxPinId = GPIO_PIN_ID_9 , .GpioRxPortId = GPIO_PORT_D, .GpioRxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_3 },
+    { .RxPinId = USART_RX_PIN_BUS3_PB11, .GpioRxPinId = GPIO_PIN_ID_11, .GpioRxPortId = GPIO_PORT_B, .GpioRxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_3 },
+    { .RxPinId = USART_RX_PIN_BUS3_PC5 , .GpioRxPinId = GPIO_PIN_ID_5 , .GpioRxPortId = GPIO_PORT_C, .GpioRxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_3 },
+    { .RxPinId = USART_RX_PIN_BUS3_PC11, .GpioRxPinId = GPIO_PIN_ID_11, .GpioRxPortId = GPIO_PORT_C, .GpioRxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_3 },
+    { .RxPinId = USART_RX_PIN_BUS3_PD9 , .GpioRxPinId = GPIO_PIN_ID_9 , .GpioRxPortId = GPIO_PORT_D, .GpioRxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_3 },
 #endif
 #ifdef UART4
-    { .RxPinId = USART_RX_PIN_BUS4_PA1 , .GpioRxPinId = GPIO_PIN_ID_1 , .GpioRxPortId = GPIO_PORT_A, .GpioRxAltFunctionId = GPIO_ALT_FUNC_8, .BusId = USART_BUS_4 },
-    { .RxPinId = USART_RX_PIN_BUS4_PC11, .GpioRxPinId = GPIO_PIN_ID_11, .GpioRxPortId = GPIO_PORT_C, .GpioRxAltFunctionId = GPIO_ALT_FUNC_8, .BusId = USART_BUS_4 },
+    { .RxPinId = USART_RX_PIN_BUS4_PA1 , .GpioRxPinId = GPIO_PIN_ID_1 , .GpioRxPortId = GPIO_PORT_A, .GpioRxAltFunctionId = GPIO_ALT_FUNC_8, .BusId = USART_PERIPH_4 },
+    { .RxPinId = USART_RX_PIN_BUS4_PC11, .GpioRxPinId = GPIO_PIN_ID_11, .GpioRxPortId = GPIO_PORT_C, .GpioRxAltFunctionId = GPIO_ALT_FUNC_8, .BusId = USART_PERIPH_4 },
 #endif
 #ifdef UART5
-    { .RxPinId = USART_RX_PIN_BUS5_PD2,  .GpioRxPinId = GPIO_PIN_ID_2 , .GpioRxPortId = GPIO_PORT_D, .GpioRxAltFunctionId = GPIO_ALT_FUNC_8, .BusId = USART_BUS_5 },
+    { .RxPinId = USART_RX_PIN_BUS5_PD2,  .GpioRxPinId = GPIO_PIN_ID_2 , .GpioRxPortId = GPIO_PORT_D, .GpioRxAltFunctionId = GPIO_ALT_FUNC_8, .BusId = USART_PERIPH_5 },
 #endif
   },
 
   .GpioTxConfig = {
 #ifdef USART1
-    { .TxPinId = USART_TX_PIN_BUS1_PA9, .GpioTxPinId = GPIO_PIN_ID_9 , .GpioTxPortId = GPIO_PORT_A, .GpioTxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_1 },
-    { .TxPinId = USART_TX_PIN_BUS1_PB6, .GpioTxPinId = GPIO_PIN_ID_6 , .GpioTxPortId = GPIO_PORT_B, .GpioTxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_1 },
-    { .TxPinId = USART_TX_PIN_BUS1_PG9, .GpioTxPinId = GPIO_PIN_ID_9 , .GpioTxPortId = GPIO_PORT_G, .GpioTxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_1 },
+    { .TxPinId = USART_TX_PIN_BUS1_PA9, .GpioTxPinId = GPIO_PIN_ID_9 , .GpioTxPortId = GPIO_PORT_A, .GpioTxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_1 },
+    { .TxPinId = USART_TX_PIN_BUS1_PB6, .GpioTxPinId = GPIO_PIN_ID_6 , .GpioTxPortId = GPIO_PORT_B, .GpioTxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_1 },
+    { .TxPinId = USART_TX_PIN_BUS1_PG9, .GpioTxPinId = GPIO_PIN_ID_9 , .GpioTxPortId = GPIO_PORT_G, .GpioTxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_1 },
 #endif
 #ifdef USART2
-    { .TxPinId = USART_TX_PIN_BUS2_PA2, .GpioTxPinId = GPIO_PIN_ID_2 , .GpioTxPortId = GPIO_PORT_A, .GpioTxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_2 },
-    { .TxPinId = USART_TX_PIN_BUS2_PD5, .GpioTxPinId = GPIO_PIN_ID_5 , .GpioTxPortId = GPIO_PORT_D, .GpioTxAltFunctionId = GPIO_ALT_FUNC_3, .BusId = USART_BUS_2 },
+    { .TxPinId = USART_TX_PIN_BUS2_PA2, .GpioTxPinId = GPIO_PIN_ID_2 , .GpioTxPortId = GPIO_PORT_A, .GpioTxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_2 },
+    { .TxPinId = USART_TX_PIN_BUS2_PD5, .GpioTxPinId = GPIO_PIN_ID_5 , .GpioTxPortId = GPIO_PORT_D, .GpioTxAltFunctionId = GPIO_ALT_FUNC_3, .BusId = USART_PERIPH_2 },
 #endif
 #ifdef USART3
-    { .TxPinId = USART_TX_PIN_BUS3_PB10, .GpioTxPinId = GPIO_PIN_ID_10, .GpioTxPortId = GPIO_PORT_B, .GpioTxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_3 },
-    { .TxPinId = USART_TX_PIN_BUS3_PC4 , .GpioTxPinId = GPIO_PIN_ID_4 , .GpioTxPortId = GPIO_PORT_C, .GpioTxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_3 },
-    { .TxPinId = USART_TX_PIN_BUS3_PC10, .GpioTxPinId = GPIO_PIN_ID_10, .GpioTxPortId = GPIO_PORT_C, .GpioTxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_3 },
-    { .TxPinId = USART_TX_PIN_BUS3_PD8 , .GpioTxPinId = GPIO_PIN_ID_8 , .GpioTxPortId = GPIO_PORT_D, .GpioTxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_3 },
+    { .TxPinId = USART_TX_PIN_BUS3_PB10, .GpioTxPinId = GPIO_PIN_ID_10, .GpioTxPortId = GPIO_PORT_B, .GpioTxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_3 },
+    { .TxPinId = USART_TX_PIN_BUS3_PC4 , .GpioTxPinId = GPIO_PIN_ID_4 , .GpioTxPortId = GPIO_PORT_C, .GpioTxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_3 },
+    { .TxPinId = USART_TX_PIN_BUS3_PC10, .GpioTxPinId = GPIO_PIN_ID_10, .GpioTxPortId = GPIO_PORT_C, .GpioTxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_3 },
+    { .TxPinId = USART_TX_PIN_BUS3_PD8 , .GpioTxPinId = GPIO_PIN_ID_8 , .GpioTxPortId = GPIO_PORT_D, .GpioTxAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_3 },
 #endif
 #ifdef UART4
-    { .TxPinId = USART_TX_PIN_BUS4_PA0 , .GpioTxPinId = GPIO_PIN_ID_0 , .GpioTxPortId = GPIO_PORT_A, .GpioTxAltFunctionId = GPIO_ALT_FUNC_8, .BusId = USART_BUS_4 },
-    { .TxPinId = USART_TX_PIN_BUS4_PC10, .GpioTxPinId = GPIO_PIN_ID_10, .GpioTxPortId = GPIO_PORT_C, .GpioTxAltFunctionId = GPIO_ALT_FUNC_8, .BusId = USART_BUS_4 },
+    { .TxPinId = USART_TX_PIN_BUS4_PA0 , .GpioTxPinId = GPIO_PIN_ID_0 , .GpioTxPortId = GPIO_PORT_A, .GpioTxAltFunctionId = GPIO_ALT_FUNC_8, .BusId = USART_PERIPH_4 },
+    { .TxPinId = USART_TX_PIN_BUS4_PC10, .GpioTxPinId = GPIO_PIN_ID_10, .GpioTxPortId = GPIO_PORT_C, .GpioTxAltFunctionId = GPIO_ALT_FUNC_8, .BusId = USART_PERIPH_4 },
 #endif
 #ifdef UART5
-    { .TxPinId = USART_TX_PIN_BUS5_PC12, .GpioTxPinId = GPIO_PIN_ID_12, .GpioTxPortId = GPIO_PORT_C, .GpioTxAltFunctionId = GPIO_ALT_FUNC_8, .BusId = USART_BUS_5 },
+    { .TxPinId = USART_TX_PIN_BUS5_PC12, .GpioTxPinId = GPIO_PIN_ID_12, .GpioTxPortId = GPIO_PORT_C, .GpioTxAltFunctionId = GPIO_ALT_FUNC_8, .BusId = USART_PERIPH_5 },
 #endif
   },
 
   .GpioDeConfig = {
 #ifdef USART1
-    { .DePinId = USART_DE_PIN_BUS1_PA12, .GpioDePinId = GPIO_PIN_ID_12, .GpioDePortId = GPIO_PORT_A, .GpioDeAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_1 },
-    { .DePinId = USART_DE_PIN_BUS1_PB3 , .GpioDePinId = GPIO_PIN_ID_3 , .GpioDePortId = GPIO_PORT_B, .GpioDeAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_1 },
-    { .DePinId = USART_DE_PIN_BUS1_PG12, .GpioDePinId = GPIO_PIN_ID_12, .GpioDePortId = GPIO_PORT_G, .GpioDeAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_1 },
+    { .DePinId = USART_DE_PIN_BUS1_PA12, .GpioDePinId = GPIO_PIN_ID_12, .GpioDePortId = GPIO_PORT_A, .GpioDeAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_1 },
+    { .DePinId = USART_DE_PIN_BUS1_PB3 , .GpioDePinId = GPIO_PIN_ID_3 , .GpioDePortId = GPIO_PORT_B, .GpioDeAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_1 },
+    { .DePinId = USART_DE_PIN_BUS1_PG12, .GpioDePinId = GPIO_PIN_ID_12, .GpioDePortId = GPIO_PORT_G, .GpioDeAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_1 },
 #endif
 #ifdef USART2
-    { .DePinId = USART_DE_PIN_BUS2_PA1, .GpioDePinId = GPIO_PIN_ID_1 , .GpioDePortId = GPIO_PORT_A, .GpioDeAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_2 },
-    { .DePinId = USART_DE_PIN_BUS2_PD4, .GpioDePinId = GPIO_PIN_ID_4 , .GpioDePortId = GPIO_PORT_D, .GpioDeAltFunctionId = GPIO_ALT_FUNC_3, .BusId = USART_BUS_2 },
+    { .DePinId = USART_DE_PIN_BUS2_PA1, .GpioDePinId = GPIO_PIN_ID_1 , .GpioDePortId = GPIO_PORT_A, .GpioDeAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_2 },
+    { .DePinId = USART_DE_PIN_BUS2_PD4, .GpioDePinId = GPIO_PIN_ID_4 , .GpioDePortId = GPIO_PORT_D, .GpioDeAltFunctionId = GPIO_ALT_FUNC_3, .BusId = USART_PERIPH_2 },
 #endif
 #ifdef USART3
-    { .DePinId = USART_DE_PIN_BUS3_PA15, .GpioDePinId = GPIO_PIN_ID_15, .GpioDePortId = GPIO_PORT_A, .GpioDeAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_3 },
-    { .DePinId = USART_DE_PIN_BUS3_PB1 , .GpioDePinId = GPIO_PIN_ID_1 , .GpioDePortId = GPIO_PORT_B, .GpioDeAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_3 },
-    { .DePinId = USART_DE_PIN_BUS3_PB14, .GpioDePinId = GPIO_PIN_ID_14, .GpioDePortId = GPIO_PORT_B, .GpioDeAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_3 },
-    { .DePinId = USART_DE_PIN_BUS3_PD2 , .GpioDePinId = GPIO_PIN_ID_2 , .GpioDePortId = GPIO_PORT_D, .GpioDeAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_3 },
-    { .DePinId = USART_DE_PIN_BUS3_PD12, .GpioDePinId = GPIO_PIN_ID_12, .GpioDePortId = GPIO_PORT_D, .GpioDeAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_BUS_3 },
+    { .DePinId = USART_DE_PIN_BUS3_PA15, .GpioDePinId = GPIO_PIN_ID_15, .GpioDePortId = GPIO_PORT_A, .GpioDeAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_3 },
+    { .DePinId = USART_DE_PIN_BUS3_PB1 , .GpioDePinId = GPIO_PIN_ID_1 , .GpioDePortId = GPIO_PORT_B, .GpioDeAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_3 },
+    { .DePinId = USART_DE_PIN_BUS3_PB14, .GpioDePinId = GPIO_PIN_ID_14, .GpioDePortId = GPIO_PORT_B, .GpioDeAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_3 },
+    { .DePinId = USART_DE_PIN_BUS3_PD2 , .GpioDePinId = GPIO_PIN_ID_2 , .GpioDePortId = GPIO_PORT_D, .GpioDeAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_3 },
+    { .DePinId = USART_DE_PIN_BUS3_PD12, .GpioDePinId = GPIO_PIN_ID_12, .GpioDePortId = GPIO_PORT_D, .GpioDeAltFunctionId = GPIO_ALT_FUNC_7, .BusId = USART_PERIPH_3 },
 #endif
 #ifdef UART4
-    { .DePinId = USART_DE_PIN_BUS4_PA15, .GpioDePinId = GPIO_PIN_ID_15, .GpioDePortId = GPIO_PORT_A, .GpioDeAltFunctionId = GPIO_ALT_FUNC_8, .BusId = USART_BUS_4 },
+    { .DePinId = USART_DE_PIN_BUS4_PA15, .GpioDePinId = GPIO_PIN_ID_15, .GpioDePortId = GPIO_PORT_A, .GpioDeAltFunctionId = GPIO_ALT_FUNC_8, .BusId = USART_PERIPH_4 },
 #endif
 #ifdef UART5
-    { .DePinId = USART_DE_PIN_BUS5_PB4, .GpioDePinId = GPIO_PIN_ID_4 , .GpioDePortId = GPIO_PORT_B, .GpioDeAltFunctionId = GPIO_ALT_FUNC_8, .BusId = USART_BUS_5 },
+    { .DePinId = USART_DE_PIN_BUS5_PB4, .GpioDePinId = GPIO_PIN_ID_4 , .GpioDePortId = GPIO_PORT_B, .GpioDeAltFunctionId = GPIO_ALT_FUNC_8, .BusId = USART_PERIPH_5 },
 #endif
   }
 };
@@ -281,7 +283,7 @@ usart_RequestState_t Usart_Get_DefaultConfig( usart_BusConfig_t* usartConfig )
 
     if( USART_NULL_PTR != usartConfig )
     {
-        usartConfig->USART_Number         = USART_BUS_1;
+        usartConfig->PeriphId         = USART_PERIPH_1;
         usartConfig->BaudRate             = 115200u;
         usartConfig->DataWidth            = USART_DATA_WIDTH_8;
         usartConfig->StopBits             = USART_STOP_BITS_1;
@@ -289,7 +291,7 @@ usart_RequestState_t Usart_Get_DefaultConfig( usart_BusConfig_t* usartConfig )
         usartConfig->TransferMode         = USART_TRANSFER_MODE_TX_RX;
         usartConfig->HwFlowControl        = USART_FLOW_CONTROL_NONE;
         usartConfig->Oversampling         = USART_OVERSAMPLING_8;
-        usartConfig->IrqPriority         = 10u;
+        usartConfig->IrqPriority          = 10u;
         usartConfig->RxNotEmpty_ISR       = USART_NULL_PTR;
         usartConfig->TransmitEmpty_ISR    = USART_NULL_PTR;
         usartConfig->TransferComplete_ISR = USART_NULL_PTR;
@@ -323,20 +325,19 @@ usart_RequestState_t Usart_Init( usart_BusConfig_t * const usartConfig )
     if( USART_NULL_PTR != usartConfig )
     {
         rcc_FunctionState_t rccActivationState = RCC_FUNCTION_INACTIVE;
-        rcc_RequestState_t  rccRequestState    = RCC_REQUEST_ERROR;
+        rcc_RequestState_t  rccRetState        = RCC_REQUEST_ERROR;
 
         /*------------- USART peripheral clock activation section ------------*/
-        rccRequestState = Rcc_Get_PeriphState( usart_PeriphConf[ usartConfig->USART_Number ].UsartRcc, &rccActivationState );
+        rccRetState = Rcc_Get_PeriphState( usart_PeriphConf[ usartConfig->PeriphId ].UsartRcc, &rccActivationState );
 
-        if( ( RCC_REQUEST_ERROR     != rccRequestState    ) &&
+        if( ( RCC_REQUEST_ERROR     != rccRetState        ) &&
             ( RCC_FUNCTION_INACTIVE != rccActivationState )    )
         {
-            rccRequestState = Rcc_Set_PeriphActive( usart_PeriphConf[ usartConfig->USART_Number ].UsartRcc );
+            rccRetState = Rcc_Set_PeriphActive( usart_PeriphConf[ usartConfig->PeriphId ].UsartRcc );
 
-            if( RCC_REQUEST_ERROR == rccRequestState )
+            if( RCC_REQUEST_ERROR == rccRetState )
             {
                 retState = USART_REQUEST_ERROR;
-                return ( retState );
             }
         }
         else
@@ -345,30 +346,33 @@ usart_RequestState_t Usart_Init( usart_BusConfig_t * const usartConfig )
         }
 
         /*---------- USART peripheral GPIO initialization section ------------*/
-        if( ( usart_GpioConfig.GpioRxConfig[ usartConfig->BusRxPin ].BusId == usartConfig->USART_Number ) &&
+        if( ( USART_REQUEST_ERROR                                          != retState                  ) &&
+            ( usart_GpioConfig.GpioRxConfig[ usartConfig->BusRxPin ].BusId == usartConfig->PeriphId ) &&
             ( USART_RX_PIN_CNT                                              > usartConfig->BusRxPin     )    )
         {
-            Usart_InitRxGpio( usartConfig->BusRxPin );
+            retState = Usart_InitRxGpio( usartConfig->BusRxPin );
         }
         else
         {
             /* RX pin configuration is not used */
         }
 
-        if( ( usart_GpioConfig.GpioTxConfig[ usartConfig->BusTxPin ].BusId == usartConfig->USART_Number ) &&
+        if( ( USART_REQUEST_ERROR                                          != retState                  ) &&
+            ( usart_GpioConfig.GpioTxConfig[ usartConfig->BusTxPin ].BusId == usartConfig->PeriphId ) &&
             ( USART_TX_PIN_CNT                                              > usartConfig->BusTxPin     )    )
         {
-            Usart_InitTxGpio( usartConfig->BusTxPin );
+            retState = Usart_InitTxGpio( usartConfig->BusTxPin );
         }
         else
         {
             /* TX pin configuration is not used */
         }
 
-        if( ( usart_GpioConfig.GpioDeConfig[ usartConfig->BusDePin ].BusId == usartConfig->USART_Number ) &&
+        if( ( USART_REQUEST_ERROR                                          != retState                  ) &&
+            ( usart_GpioConfig.GpioDeConfig[ usartConfig->BusDePin ].BusId == usartConfig->PeriphId ) &&
             ( USART_DE_PIN_CNT                                              > usartConfig->BusDePin     )    )
         {
-            Usart_InitDeGpio( usartConfig->BusDePin );
+            retState = Usart_InitDeGpio( usartConfig->BusDePin );
         }
         else
         {
@@ -376,118 +380,134 @@ usart_RequestState_t Usart_Init( usart_BusConfig_t * const usartConfig )
         }
 
         /*------------ USART peripheral initialization section ---------------*/
-        LL_USART_Disable( usart_PeriphConf[ usartConfig->USART_Number ].UsartReg );
+
+        Usart_Set_PeriphInactive( usartConfig->PeriphId );
 
 
-        rccRequestState = Rcc_Set_ResetActive( usart_PeriphConf[ usartConfig->USART_Number ].UsartRcc );
-        if( RCC_REQUEST_OK != rccRequestState )
+        if( USART_REQUEST_ERROR != retState )
         {
-            retState = USART_REQUEST_ERROR;
-            return ( retState );
+            rccRetState = Rcc_Set_ResetActive( usart_PeriphConf[ usartConfig->PeriphId ].UsartRcc );
+
+            if( RCC_REQUEST_OK != rccRetState )
+            {
+                retState = USART_REQUEST_ERROR;
+            }
         }
 
-        rccRequestState = Rcc_Set_ResetInactive( usart_PeriphConf[ usartConfig->USART_Number ].UsartRcc );
-        if( RCC_REQUEST_OK != rccRequestState )
+        if( USART_REQUEST_ERROR != retState )
         {
-            retState = USART_REQUEST_ERROR;
-            return ( retState );
+            rccRetState = Rcc_Set_ResetInactive( usart_PeriphConf[ usartConfig->PeriphId ].UsartRcc );
+            if( RCC_REQUEST_OK != rccRetState )
+            {
+                retState = USART_REQUEST_ERROR;
+            }
         }
 
-        /* Over-sampling configuration must be executed before baud-rate configuration */
-        retState = Usart_Set_Oversampling( usartConfig->USART_Number, usartConfig->Oversampling );
-        if( USART_REQUEST_OK != retState )
+        if( USART_REQUEST_OK == retState )
         {
-            return ( retState );
+            /* Over-sampling configuration must be executed before baud-rate configuration */
+            retState = Usart_Set_Oversampling( usartConfig->PeriphId, usartConfig->Oversampling );
         }
 
-        retState = Usart_Set_Baudrate( usartConfig->USART_Number, usartConfig->BaudRate );
-        if( USART_REQUEST_OK != retState )
+        if( USART_REQUEST_OK == retState )
         {
-            return ( retState );
+            retState = Usart_Set_Baudrate( usartConfig->PeriphId, usartConfig->BaudRate );
         }
 
-        retState = Usart_Set_DataWidth( usartConfig->USART_Number, usartConfig->DataWidth );
-        if( USART_REQUEST_OK != retState )
+        if( USART_REQUEST_OK == retState )
         {
-            return ( retState );
+            retState = Usart_Set_DataWidth( usartConfig->PeriphId, usartConfig->DataWidth );
         }
 
-        retState = Usart_Set_StopBits( usartConfig->USART_Number, usartConfig->StopBits );
-        if( USART_REQUEST_OK != retState )
+        if( USART_REQUEST_OK == retState )
         {
-            return ( retState );
+            retState = Usart_Set_StopBits( usartConfig->PeriphId, usartConfig->StopBits );
         }
 
-        retState = Usart_Set_Parity( usartConfig->USART_Number, usartConfig->Parity );
-        if( USART_REQUEST_OK != retState )
+        if( USART_REQUEST_OK == retState )
         {
-            return ( retState );
+            retState = Usart_Set_Parity( usartConfig->PeriphId, usartConfig->Parity );
         }
 
-        retState = Usart_Set_TransferMode( usartConfig->USART_Number, usartConfig->TransferMode );
-        if( USART_REQUEST_OK != retState )
+        if( USART_REQUEST_OK == retState )
         {
-            return ( retState );
+            retState = Usart_Set_TransferMode( usartConfig->PeriphId, usartConfig->TransferMode );
         }
 
-        retState = Usart_Set_FlowControl( usartConfig->USART_Number, usartConfig->HwFlowControl );
-        if( USART_REQUEST_OK != retState )
+        if( USART_REQUEST_OK == retState )
         {
-            return ( retState );
+            retState = Usart_Set_FlowControl( usartConfig->PeriphId, usartConfig->HwFlowControl );
         }
 
-        retState = Usart_Set_HalfDuplexState( usartConfig->USART_Number, usartConfig->HalfDuplex );
-        if( USART_REQUEST_OK != retState )
+        if( USART_REQUEST_OK == retState )
         {
-            return ( retState );
+            retState = Usart_Set_HalfDuplexState( usartConfig->PeriphId, usartConfig->HalfDuplex );
         }
 
-        retState = Usart_Set_DriverEnableState( usartConfig->USART_Number, usartConfig->DriverEnableMode );
-        if( USART_REQUEST_OK != retState )
+        if( USART_REQUEST_OK == retState )
         {
-            return ( retState );
+            retState = Usart_Set_DriverEnableState( usartConfig->PeriphId, usartConfig->DriverEnableMode );
         }
 
-        retState = Usart_Set_DriverEnablePolarity( usartConfig->USART_Number, usartConfig->DriverEnablePolarity );
-        if( USART_REQUEST_OK != retState )
+        if( USART_REQUEST_OK == retState )
         {
-            return ( retState );
+            retState = Usart_Set_DriverEnablePolarity( usartConfig->PeriphId, usartConfig->DriverEnablePolarity );
         }
 
-        retState = Usart_Set_PinLevels( usartConfig->USART_Number, usartConfig->RxPinOperationLevels, usartConfig->TxPinOperationLevels );
-        if( USART_REQUEST_OK != retState )
+        if( USART_REQUEST_OK == retState )
         {
-            return ( retState );
+            retState = Usart_Set_PinLevels( usartConfig->PeriphId, usartConfig->RxPinOperationLevels, usartConfig->TxPinOperationLevels );
         }
 
 
-        if( USART_RX_TIMEOUT_MIN != usartConfig->RxTimeoutValue )
+        if( USART_REQUEST_OK == retState )
         {
-            retState = Usart_Set_RxTimeoutActive( usartConfig->USART_Number, usartConfig->RxTimeoutValue );
-        }
-        else
-        {
-            retState = Usart_Set_RxTimeoutInactive( usartConfig->USART_Number );
-        }
-
-        if( USART_REQUEST_OK != retState )
-        {
-            return ( retState );
+            if( USART_RX_TIMEOUT_MIN != usartConfig->RxTimeoutValue )
+            {
+                retState = Usart_Set_RxTimeoutActive( usartConfig->PeriphId, usartConfig->RxTimeoutValue );
+            }
+            else
+            {
+                retState = Usart_Set_RxTimeoutInactive( usartConfig->PeriphId );
+            }
         }
 
-        LL_USART_Enable( usart_PeriphConf[ usartConfig->USART_Number ].UsartReg );
+        Usart_Set_PeriphActive( usartConfig->PeriphId );
 
-        Usart_Set_IrqPriority          ( usartConfig->USART_Number, usartConfig->IrqPriority          );
+        Usart_Set_IrqPriority( usartConfig->PeriphId, usartConfig->IrqPriority );
 
-        /* Return states of following functions are not checked. User do not need to strictly configure those options */
-        ( void ) Usart_Set_RxNotEmptyIsrCallback( usartConfig->USART_Number, usartConfig->RxNotEmpty_ISR       );
-        ( void ) Usart_Set_TxEmptyIsrCallback   ( usartConfig->USART_Number, usartConfig->TransmitEmpty_ISR    );
-        ( void ) Usart_Set_TxCompleteIsrCallback( usartConfig->USART_Number, usartConfig->TransferComplete_ISR );
-        ( void ) Usart_Set_IdleIsrCallback      ( usartConfig->USART_Number, usartConfig->Idle_ISR             );
-        ( void ) Usart_Set_RxTimeoutIsrCallback ( usartConfig->USART_Number, usartConfig->RxTimeout_ISR        );
-        ( void ) Usart_Set_ErrorIsrCallback     ( usartConfig->USART_Number, usartConfig->Error_ISR            );
+        if( USART_REQUEST_OK == retState )
+        {
+            if( USART_XFER_NONE == usartConfig->TransferStyle )
+            {
+                /* Return states of following functions are not checked. User do not need to strictly configure those options */
+                ( void ) Usart_Set_RxNotEmptyIsrCallback( usartConfig->PeriphId, usartConfig->RxNotEmpty_ISR       );
+                ( void ) Usart_Set_TxEmptyIsrCallback   ( usartConfig->PeriphId, usartConfig->TransmitEmpty_ISR    );
+                ( void ) Usart_Set_TxCompleteIsrCallback( usartConfig->PeriphId, usartConfig->TransferComplete_ISR );
+                ( void ) Usart_Set_IdleIsrCallback      ( usartConfig->PeriphId, usartConfig->Idle_ISR             );
+                ( void ) Usart_Set_RxTimeoutIsrCallback ( usartConfig->PeriphId, usartConfig->RxTimeout_ISR        );
+                ( void ) Usart_Set_ErrorIsrCallback     ( usartConfig->PeriphId, usartConfig->Error_ISR            );
 
-        retState = USART_REQUEST_OK;
+                retState = USART_REQUEST_OK;
+            }
+            else if( USART_XFER_BLOCKING == usartConfig->TransferStyle )
+            {
+//                retState = Usart_CommBlocking_Init();
+            }
+            else if( USART_XFER_INTERRUPT == usartConfig->TransferStyle )
+            {
+//                retState = Usart_CommInterrupt_Init();
+            }
+            else if( USART_XFER_DMA == usartConfig->TransferStyle )
+            {
+//                retState = Usart_CommDma_Init();
+            }
+            else
+            {
+                /* Invalid transfer style configuration */
+                retState = USART_REQUEST_ERROR;
+            }
+        }
     }
     else
     {
@@ -511,11 +531,11 @@ usart_RequestState_t Usart_Deinit( usart_BusConfig_t const * usartConfig )
 
     if( USART_NULL_PTR != usartConfig )
     {
-        Nvic_Set_PeriphIrq_Inactive( usart_PeriphConf[ usartConfig->USART_Number ].UsartNvic );
+        Nvic_Set_PeriphIrq_Inactive( usart_PeriphConf[ usartConfig->PeriphId ].UsartNvic );
 
-        LL_USART_Disable( usart_PeriphConf[ usartConfig->USART_Number ].UsartReg );
+        Usart_Set_PeriphInactive( usartConfig->PeriphId );
 
-        Rcc_Set_PeriphInactive( usart_PeriphConf[ usartConfig->USART_Number ].UsartRcc );
+        Rcc_Set_PeriphInactive( usart_PeriphConf[ usartConfig->PeriphId ].UsartRcc );
 
         returnState = USART_REQUEST_OK;
     }
@@ -525,6 +545,66 @@ usart_RequestState_t Usart_Deinit( usart_BusConfig_t const * usartConfig )
     }
 
     return ( returnState );
+}
+
+
+/**
+ * \brief Sets USART/UART peripheral in active state
+ *
+ * \param usartId [in]: USART/UART bus identification.
+ */
+void Usart_Set_PeriphActive( usart_PeriphId_t usartId )
+{
+    LL_USART_Enable( usart_PeriphConf[ usartId ].UsartReg );
+}
+
+
+/**
+ * \brief Sets USART/UART peripheral in inactive state
+ *
+ * \param usartId [in]: USART/UART bus identification.
+ */
+void Usart_Set_PeriphInactive( usart_PeriphId_t usartId )
+{
+    LL_USART_Disable( usart_PeriphConf[ usartId ].UsartReg );
+}
+
+
+/**
+ * \brief Returns the state of USART/UART peripheral
+ *
+ * \param usartId      [in]: USART/UART bus identification.
+ * \param periphState [out]: State of USART/UART peripheral. It can be either
+ *                            "active" or "inactive".
+ * \return State of request execution. Returns "OK" if request was success,
+ *         otherwise return error.
+ */
+usart_RequestState_t Usart_Get_PeriphState( usart_PeriphId_t usartId, usart_FunctionState_t * const periphState )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( ( USART_NULL_PTR != periphState ) &&
+        ( USART_BUS_CNT  >= usartId     )    )
+    {
+        uint32_t regVal = LL_USART_IsEnabled( usart_PeriphConf[ usartId ].UsartReg );
+
+        if( 0u != regVal )
+        {
+            *periphState = USART_FUNCTION_ACTIVE;
+        }
+        else
+        {
+            *periphState = USART_FUNCTION_INACTIVE;
+        }
+
+        retState = USART_REQUEST_OK;
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
 }
 
 
@@ -540,7 +620,7 @@ usart_RequestState_t Usart_Deinit( usart_BusConfig_t const * usartConfig )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_Baudrate( usart_BusId_t usartId, usart_Baudrate_t baudrate )
+usart_RequestState_t Usart_Set_Baudrate( usart_PeriphId_t usartId, usart_Baudrate_t baudrate )
 {
     usart_RequestState_t retValue       = USART_REQUEST_ERROR;
     usart_Oversampling_t oversampling   = USART_OVERSAMPLING_16;
@@ -603,7 +683,7 @@ usart_RequestState_t Usart_Set_Baudrate( usart_BusId_t usartId, usart_Baudrate_t
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_Baudrate( usart_BusId_t usartId, usart_Baudrate_t * const baudrate )
+usart_RequestState_t Usart_Get_Baudrate( usart_PeriphId_t usartId, usart_Baudrate_t * const baudrate )
 {
     usart_RequestState_t retValue       = USART_REQUEST_ERROR;
     usart_Oversampling_t oversampling   = USART_OVERSAMPLING_16;
@@ -643,7 +723,7 @@ usart_RequestState_t Usart_Get_Baudrate( usart_BusId_t usartId, usart_Baudrate_t
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_DataWidth( usart_BusId_t usartId, usart_DataWidth_t dataWidth )
+usart_RequestState_t Usart_Set_DataWidth( usart_PeriphId_t usartId, usart_DataWidth_t dataWidth )
 {
     usart_RequestState_t retValue     = USART_REQUEST_ERROR;
     uint32_t             dataWidthReg = 0u;
@@ -685,7 +765,7 @@ usart_RequestState_t Usart_Set_DataWidth( usart_BusId_t usartId, usart_DataWidth
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_DataWidth( usart_BusId_t usartId, usart_DataWidth_t * const dataWidth )
+usart_RequestState_t Usart_Get_DataWidth( usart_PeriphId_t usartId, usart_DataWidth_t * const dataWidth )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -712,7 +792,7 @@ usart_RequestState_t Usart_Get_DataWidth( usart_BusId_t usartId, usart_DataWidth
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_StopBits( usart_BusId_t usartId, usart_StopBits_t stopBits )
+usart_RequestState_t Usart_Set_StopBits( usart_PeriphId_t usartId, usart_StopBits_t stopBits )
 {
     usart_RequestState_t retValue    = USART_REQUEST_ERROR;
     uint32_t             stopBitsReg = 0u;
@@ -754,7 +834,7 @@ usart_RequestState_t Usart_Set_StopBits( usart_BusId_t usartId, usart_StopBits_t
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_StopBits( usart_BusId_t usartId, usart_StopBits_t * const stopBits )
+usart_RequestState_t Usart_Get_StopBits( usart_PeriphId_t usartId, usart_StopBits_t * const stopBits )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -781,7 +861,7 @@ usart_RequestState_t Usart_Get_StopBits( usart_BusId_t usartId, usart_StopBits_t
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_Parity( usart_BusId_t usartId, usart_Parity_t parity )
+usart_RequestState_t Usart_Set_Parity( usart_PeriphId_t usartId, usart_Parity_t parity )
 {
     usart_RequestState_t retValue  = USART_REQUEST_ERROR;
     uint32_t             parityReg = 0u;
@@ -823,7 +903,7 @@ usart_RequestState_t Usart_Set_Parity( usart_BusId_t usartId, usart_Parity_t par
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_Parity( usart_BusId_t usartId, usart_Parity_t * const parity )
+usart_RequestState_t Usart_Get_Parity( usart_PeriphId_t usartId, usart_Parity_t * const parity )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -850,7 +930,7 @@ usart_RequestState_t Usart_Get_Parity( usart_BusId_t usartId, usart_Parity_t * c
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_TransferMode( usart_BusId_t usartId, usart_TransferMode_t transferMode )
+usart_RequestState_t Usart_Set_TransferMode( usart_PeriphId_t usartId, usart_TransferMode_t transferMode )
 {
     usart_RequestState_t retValue        = USART_REQUEST_ERROR;
     uint32_t             transferModeReg = 0u;
@@ -892,7 +972,7 @@ usart_RequestState_t Usart_Set_TransferMode( usart_BusId_t usartId, usart_Transf
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_TransferMode( usart_BusId_t usartId, usart_TransferMode_t * const transferMode )
+usart_RequestState_t Usart_Get_TransferMode( usart_PeriphId_t usartId, usart_TransferMode_t * const transferMode )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -919,7 +999,7 @@ usart_RequestState_t Usart_Get_TransferMode( usart_BusId_t usartId, usart_Transf
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_FlowControl( usart_BusId_t usartId, usart_FlowControl_t flowControl )
+usart_RequestState_t Usart_Set_FlowControl( usart_PeriphId_t usartId, usart_FlowControl_t flowControl )
 {
     usart_RequestState_t retValue       = USART_REQUEST_ERROR;
     uint32_t             flowControlReg = 0u;
@@ -961,7 +1041,7 @@ usart_RequestState_t Usart_Set_FlowControl( usart_BusId_t usartId, usart_FlowCon
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_FlowControl( usart_BusId_t usartId, usart_FlowControl_t * const flowControl )
+usart_RequestState_t Usart_Get_FlowControl( usart_PeriphId_t usartId, usart_FlowControl_t * const flowControl )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -988,7 +1068,7 @@ usart_RequestState_t Usart_Get_FlowControl( usart_BusId_t usartId, usart_FlowCon
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_DriverEnableState( usart_BusId_t usartId, usart_DeFeatureState_t deState )
+usart_RequestState_t Usart_Set_DriverEnableState( usart_PeriphId_t usartId, usart_DeFeatureState_t deState )
 {
     usart_RequestState_t retValue        = USART_REQUEST_ERROR;
     uint32_t             driverEnableReg = 0u;
@@ -1037,7 +1117,7 @@ usart_RequestState_t Usart_Set_DriverEnableState( usart_BusId_t usartId, usart_D
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_DriverEnableState( usart_BusId_t usartId, usart_DeFeatureState_t * const deState )
+usart_RequestState_t Usart_Get_DriverEnableState( usart_PeriphId_t usartId, usart_DeFeatureState_t * const deState )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -1064,7 +1144,7 @@ usart_RequestState_t Usart_Get_DriverEnableState( usart_BusId_t usartId, usart_D
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_DriverEnablePolarity( usart_BusId_t usartId, usart_DePolarity_t dePolarity )
+usart_RequestState_t Usart_Set_DriverEnablePolarity( usart_PeriphId_t usartId, usart_DePolarity_t dePolarity )
 {
     usart_RequestState_t retValue        = USART_REQUEST_ERROR;
     uint32_t             driverEnableReg = 0u;
@@ -1106,7 +1186,7 @@ usart_RequestState_t Usart_Set_DriverEnablePolarity( usart_BusId_t usartId, usar
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_DriverEnablePolarity( usart_BusId_t usartId, usart_DePolarity_t * const dePolarity )
+usart_RequestState_t Usart_Get_DriverEnablePolarity( usart_PeriphId_t usartId, usart_DePolarity_t * const dePolarity )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -1162,7 +1242,7 @@ usart_RequestState_t Usart_Get_DriverEnablePolarity( usart_BusId_t usartId, usar
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_AssertDeassertTimes( usart_BusId_t usartId, usart_AssertTime_us_t assertTime, usart_DeassertTime_us_t deassertTime )
+usart_RequestState_t Usart_Set_AssertDeassertTimes( usart_PeriphId_t usartId, usart_AssertTime_us_t assertTime, usart_DeassertTime_us_t deassertTime )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -1254,7 +1334,7 @@ usart_RequestState_t Usart_Set_AssertDeassertTimes( usart_BusId_t usartId, usart
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_AssertDeassertTimes( usart_BusId_t usartId, usart_AssertTime_us_t * const assertTime, usart_DeassertTime_us_t * const deassertTime )
+usart_RequestState_t Usart_Get_AssertDeassertTimes( usart_PeriphId_t usartId, usart_AssertTime_us_t * const assertTime, usart_DeassertTime_us_t * const deassertTime )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -1302,7 +1382,7 @@ usart_RequestState_t Usart_Get_AssertDeassertTimes( usart_BusId_t usartId, usart
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_Oversampling( usart_BusId_t usartId, usart_Oversampling_t oversamplingMode )
+usart_RequestState_t Usart_Set_Oversampling( usart_PeriphId_t usartId, usart_Oversampling_t oversamplingMode )
 {
     usart_RequestState_t retValue        = USART_REQUEST_ERROR;
     uint32_t             oversamplingReg = 0u;
@@ -1345,7 +1425,7 @@ usart_RequestState_t Usart_Set_Oversampling( usart_BusId_t usartId, usart_Oversa
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_Oversampling( usart_BusId_t usartId, usart_Oversampling_t * const oversamplingMode )
+usart_RequestState_t Usart_Get_Oversampling( usart_PeriphId_t usartId, usart_Oversampling_t * const oversamplingMode )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -1370,7 +1450,7 @@ usart_RequestState_t Usart_Get_Oversampling( usart_BusId_t usartId, usart_Oversa
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_HalfDuplexState( usart_BusId_t usartId, usart_HalfDuplex_t halfDuplexState )
+usart_RequestState_t Usart_Set_HalfDuplexState( usart_PeriphId_t usartId, usart_HalfDuplex_t halfDuplexState )
 {
     usart_RequestState_t retValue           = USART_REQUEST_ERROR;
     uint32_t             halfDuplexStateReg = 0u;
@@ -1419,7 +1499,7 @@ usart_RequestState_t Usart_Set_HalfDuplexState( usart_BusId_t usartId, usart_Hal
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_HalfDuplexState( usart_BusId_t usartId, usart_HalfDuplex_t * const halfDuplexState )
+usart_RequestState_t Usart_Get_HalfDuplexState( usart_PeriphId_t usartId, usart_HalfDuplex_t * const halfDuplexState )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -1460,7 +1540,7 @@ usart_RequestState_t Usart_Get_HalfDuplexState( usart_BusId_t usartId, usart_Hal
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_RxTimeoutActive( usart_BusId_t usartId, usart_RxTimeout_t timeoutBitsCnt )
+usart_RequestState_t Usart_Set_RxTimeoutActive( usart_PeriphId_t usartId, usart_RxTimeout_t timeoutBitsCnt )
 {
     usart_RequestState_t retValue     = USART_REQUEST_ERROR;
     uint32_t             regValue     = 0u;
@@ -1511,7 +1591,7 @@ usart_RequestState_t Usart_Set_RxTimeoutActive( usart_BusId_t usartId, usart_RxT
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_RxTimeoutInactive( usart_BusId_t usartId )
+usart_RequestState_t Usart_Set_RxTimeoutInactive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
     uint32_t             regValue = 0u;
@@ -1553,7 +1633,7 @@ usart_RequestState_t Usart_Set_RxTimeoutInactive( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_RxTimeoutState( usart_BusId_t usartId, usart_FlagState_t * const reqState )
+usart_RequestState_t Usart_Get_RxTimeoutState( usart_PeriphId_t usartId, usart_FlagState_t * const reqState )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -1593,7 +1673,7 @@ usart_RequestState_t Usart_Get_RxTimeoutState( usart_BusId_t usartId, usart_Flag
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_PinLevels( usart_BusId_t usartId, usart_RxPinLevel_t rxPinLevels, usart_TxPinLevel_t txPinLevels )
+usart_RequestState_t Usart_Set_PinLevels( usart_PeriphId_t usartId, usart_RxPinLevel_t rxPinLevels, usart_TxPinLevel_t txPinLevels )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -1641,7 +1721,7 @@ usart_RequestState_t Usart_Set_PinLevels( usart_BusId_t usartId, usart_RxPinLeve
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_PinLevels( usart_BusId_t usartId, usart_RxPinLevel_t * const rxPinLevels, usart_TxPinLevel_t * const txPinLevels )
+usart_RequestState_t Usart_Get_PinLevels( usart_PeriphId_t usartId, usart_RxPinLevel_t * const rxPinLevels, usart_TxPinLevel_t * const txPinLevels )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -1669,7 +1749,7 @@ usart_RequestState_t Usart_Get_PinLevels( usart_BusId_t usartId, usart_RxPinLeve
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_TxRegisterAddr( usart_BusId_t usartId, usart_RxRegAddr_t * const regAddr )
+usart_RequestState_t Usart_Get_TxRegisterAddr( usart_PeriphId_t usartId, usart_RxRegAddr_t * const regAddr )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -1697,7 +1777,7 @@ usart_RequestState_t Usart_Get_TxRegisterAddr( usart_BusId_t usartId, usart_RxRe
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_RxRegisterAddr( usart_BusId_t usartId, usart_RxRegAddr_t * const regAddr )
+usart_RequestState_t Usart_Get_RxRegisterAddr( usart_PeriphId_t usartId, usart_RxRegAddr_t * const regAddr )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -1723,7 +1803,7 @@ usart_RequestState_t Usart_Get_RxRegisterAddr( usart_BusId_t usartId, usart_RxRe
  * \param usartId [in]: USART/UART bus identification.
  * \param txData  [in]: Data to be transmitted
  */
-void Usart_SendData( usart_BusId_t usartId, usart_TxData_t txData )
+void Usart_SendData( usart_PeriphId_t usartId, usart_TxData_t txData )
 {
     usart_PeriphConf[ usartId ].UsartReg->TDR = txData;
 }
@@ -1735,7 +1815,7 @@ void Usart_SendData( usart_BusId_t usartId, usart_TxData_t txData )
  * \param usartId [in]: USART/UART bus identification.
  * \return Received data value
  */
-usart_RxData_t Usart_ReadData( usart_BusId_t usartId )
+usart_RxData_t Usart_ReadData( usart_PeriphId_t usartId )
 {
     return ( usart_PeriphConf[ usartId ].UsartReg->RDR );
 }
@@ -1752,7 +1832,7 @@ usart_RxData_t Usart_ReadData( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_InterruptsActive( usart_BusId_t usartId )
+usart_RequestState_t Usart_Set_InterruptsActive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retState               = USART_REQUEST_ERROR;
     nvic_RequestState_t  nvicActivationState    = NVIC_REQUEST_ERROR;
@@ -1792,7 +1872,7 @@ usart_RequestState_t Usart_Set_InterruptsActive( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_InterruptsInactive( usart_BusId_t usartId )
+usart_RequestState_t Usart_Set_InterruptsInactive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retState  = USART_REQUEST_ERROR;
     nvic_RequestState_t  nvicState = NVIC_REQUEST_ERROR;
@@ -1827,7 +1907,7 @@ usart_RequestState_t Usart_Set_InterruptsInactive( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_IrqPriority( usart_BusId_t usartId, usart_IrqPrio_t irqPrio )
+usart_RequestState_t Usart_Set_IrqPriority( usart_PeriphId_t usartId, usart_IrqPrio_t irqPrio )
 {
     usart_RequestState_t retState  = USART_REQUEST_ERROR;
     nvic_RequestState_t  nvicState = NVIC_REQUEST_ERROR;
@@ -1862,7 +1942,7 @@ usart_RequestState_t Usart_Set_IrqPriority( usart_BusId_t usartId, usart_IrqPrio
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_IrqPriority( usart_BusId_t usartId, usart_IrqPrio_t * const irqPrio )
+usart_RequestState_t Usart_Get_IrqPriority( usart_PeriphId_t usartId, usart_IrqPrio_t * const irqPrio )
 {
     usart_RequestState_t retState  = USART_REQUEST_ERROR;
     nvic_RequestState_t  nvicState = NVIC_REQUEST_ERROR;
@@ -1902,7 +1982,7 @@ usart_RequestState_t Usart_Get_IrqPriority( usart_BusId_t usartId, usart_IrqPrio
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_DmaTxRequestActive( usart_BusId_t usartId )
+usart_RequestState_t Usart_Set_DmaTxRequestActive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
     uint32_t             regValue = 0u;
@@ -1948,7 +2028,7 @@ usart_RequestState_t Usart_Set_DmaTxRequestActive( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_DmaTxRequestInactive( usart_BusId_t usartId )
+usart_RequestState_t Usart_Set_DmaTxRequestInactive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
     uint32_t             regValue = 0u;
@@ -1995,7 +2075,7 @@ usart_RequestState_t Usart_Set_DmaTxRequestInactive( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_DmaTxReqState( usart_BusId_t usartId, usart_FlagState_t * const reqState)
+usart_RequestState_t Usart_Get_DmaTxReqState( usart_PeriphId_t usartId, usart_FlagState_t * const reqState)
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -2036,7 +2116,7 @@ usart_RequestState_t Usart_Get_DmaTxReqState( usart_BusId_t usartId, usart_FlagS
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_DmaRxRequestActive( usart_BusId_t usartId )
+usart_RequestState_t Usart_Set_DmaRxRequestActive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
     uint32_t             regValue = 0u;
@@ -2082,7 +2162,7 @@ usart_RequestState_t Usart_Set_DmaRxRequestActive( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_DmaRxRequestInactive( usart_BusId_t usartId )
+usart_RequestState_t Usart_Set_DmaRxRequestInactive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
     uint32_t             regValue = 0u;
@@ -2129,7 +2209,7 @@ usart_RequestState_t Usart_Set_DmaRxRequestInactive( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_DmaRxReqState( usart_BusId_t usartId, usart_FlagState_t * const reqState)
+usart_RequestState_t Usart_Get_DmaRxReqState( usart_PeriphId_t usartId, usart_FlagState_t * const reqState)
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -2165,7 +2245,7 @@ usart_RequestState_t Usart_Get_DmaRxReqState( usart_BusId_t usartId, usart_FlagS
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_RxNotEmptyIrqActive( usart_BusId_t usartId )
+usart_RequestState_t Usart_Set_RxNotEmptyIrqActive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
     uint32_t             regValue = 0u;
@@ -2208,7 +2288,7 @@ usart_RequestState_t Usart_Set_RxNotEmptyIrqActive( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_RxNotEmptyIrqInactive( usart_BusId_t usartId )
+usart_RequestState_t Usart_Set_RxNotEmptyIrqInactive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
     uint32_t             regValue = 0u;
@@ -2252,7 +2332,7 @@ usart_RequestState_t Usart_Set_RxNotEmptyIrqInactive( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_RxNotEmptyIrqState( usart_BusId_t usartId, usart_FlagState_t * const reqState)
+usart_RequestState_t Usart_Get_RxNotEmptyIrqState( usart_PeriphId_t usartId, usart_FlagState_t * const reqState)
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -2289,7 +2369,7 @@ usart_RequestState_t Usart_Get_RxNotEmptyIrqState( usart_BusId_t usartId, usart_
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_RxNotEmptyIsrCallback( usart_BusId_t usartId, usart_RxNeIrqCallback_t * const callback)
+usart_RequestState_t Usart_Set_RxNotEmptyIsrCallback( usart_PeriphId_t usartId, usart_RxNeIrqCallback_t * const callback)
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -2316,7 +2396,7 @@ usart_RequestState_t Usart_Set_RxNotEmptyIsrCallback( usart_BusId_t usartId, usa
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_TxEmptyIrqActive( usart_BusId_t usartId )
+usart_RequestState_t Usart_Set_TxEmptyIrqActive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
     uint32_t             regValue = 0u;
@@ -2357,7 +2437,7 @@ usart_RequestState_t Usart_Set_TxEmptyIrqActive( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_TxEmptyIrqInactive( usart_BusId_t usartId )
+usart_RequestState_t Usart_Set_TxEmptyIrqInactive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
     uint32_t             regValue = 0u;
@@ -2399,7 +2479,7 @@ usart_RequestState_t Usart_Set_TxEmptyIrqInactive( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_TxEmptyIrqState( usart_BusId_t usartId, usart_FlagState_t * const reqState)
+usart_RequestState_t Usart_Get_TxEmptyIrqState( usart_PeriphId_t usartId, usart_FlagState_t * const reqState)
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -2436,7 +2516,7 @@ usart_RequestState_t Usart_Get_TxEmptyIrqState( usart_BusId_t usartId, usart_Fla
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_TxEmptyIsrCallback( usart_BusId_t usartId, usart_TxeIrqCallback_t * const callback )
+usart_RequestState_t Usart_Set_TxEmptyIsrCallback( usart_PeriphId_t usartId, usart_TxeIrqCallback_t * const callback )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -2463,7 +2543,7 @@ usart_RequestState_t Usart_Set_TxEmptyIsrCallback( usart_BusId_t usartId, usart_
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_TxCompleteIrqActive( usart_BusId_t usartId )
+usart_RequestState_t Usart_Set_TxCompleteIrqActive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
     uint32_t             regValue = 0u;
@@ -2506,7 +2586,7 @@ usart_RequestState_t Usart_Set_TxCompleteIrqActive( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_TxCompleteIrqInactive( usart_BusId_t usartId )
+usart_RequestState_t Usart_Set_TxCompleteIrqInactive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
     uint32_t             regValue = 0u;
@@ -2548,7 +2628,7 @@ usart_RequestState_t Usart_Set_TxCompleteIrqInactive( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_TxCompleteIrqState( usart_BusId_t usartId, usart_FlagState_t * const reqState)
+usart_RequestState_t Usart_Get_TxCompleteIrqState( usart_PeriphId_t usartId, usart_FlagState_t * const reqState)
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -2585,7 +2665,7 @@ usart_RequestState_t Usart_Get_TxCompleteIrqState( usart_BusId_t usartId, usart_
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_TxCompleteIsrCallback( usart_BusId_t usartId, usart_TcIrqCallback_t * const callback)
+usart_RequestState_t Usart_Set_TxCompleteIsrCallback( usart_PeriphId_t usartId, usart_TcIrqCallback_t * const callback)
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -2611,7 +2691,7 @@ usart_RequestState_t Usart_Set_TxCompleteIsrCallback( usart_BusId_t usartId, usa
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_IdleIrqActive( usart_BusId_t usartId )
+usart_RequestState_t Usart_Set_IdleIrqActive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
     uint32_t             regValue = 0u;
@@ -2654,7 +2734,7 @@ usart_RequestState_t Usart_Set_IdleIrqActive( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_IdleIrqInactive( usart_BusId_t usartId )
+usart_RequestState_t Usart_Set_IdleIrqInactive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
     uint32_t             regValue = 0u;
@@ -2696,7 +2776,7 @@ usart_RequestState_t Usart_Set_IdleIrqInactive( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_IdleIrqState( usart_BusId_t usartId, usart_FlagState_t * const reqState)
+usart_RequestState_t Usart_Get_IdleIrqState( usart_PeriphId_t usartId, usart_FlagState_t * const reqState)
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -2733,7 +2813,7 @@ usart_RequestState_t Usart_Get_IdleIrqState( usart_BusId_t usartId, usart_FlagSt
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_IdleIsrCallback( usart_BusId_t usartId, usart_IdleIrqCallback_t * const callback)
+usart_RequestState_t Usart_Set_IdleIsrCallback( usart_PeriphId_t usartId, usart_IdleIrqCallback_t * const callback)
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -2759,7 +2839,7 @@ usart_RequestState_t Usart_Set_IdleIsrCallback( usart_BusId_t usartId, usart_Idl
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_RxTimeoutIrqActive( usart_BusId_t usartId )
+usart_RequestState_t Usart_Set_RxTimeoutIrqActive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
     uint32_t             regValue = 0u;
@@ -2802,7 +2882,7 @@ usart_RequestState_t Usart_Set_RxTimeoutIrqActive( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_RxTimeoutIrqInactive( usart_BusId_t usartId )
+usart_RequestState_t Usart_Set_RxTimeoutIrqInactive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
     uint32_t             regValue = 0u;
@@ -2844,7 +2924,7 @@ usart_RequestState_t Usart_Set_RxTimeoutIrqInactive( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_RxTimeoutIrqState( usart_BusId_t usartId, usart_FlagState_t * const reqState)
+usart_RequestState_t Usart_Get_RxTimeoutIrqState( usart_PeriphId_t usartId, usart_FlagState_t * const reqState)
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -2881,7 +2961,7 @@ usart_RequestState_t Usart_Get_RxTimeoutIrqState( usart_BusId_t usartId, usart_F
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_RxTimeoutIsrCallback( usart_BusId_t usartId, usart_RxTimeoutIrqCallback_t * const callback)
+usart_RequestState_t Usart_Set_RxTimeoutIsrCallback( usart_PeriphId_t usartId, usart_RxTimeoutIrqCallback_t * const callback)
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -2911,7 +2991,7 @@ usart_RequestState_t Usart_Set_RxTimeoutIsrCallback( usart_BusId_t usartId, usar
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_ErrorIrqActive( usart_BusId_t usartId )
+usart_RequestState_t Usart_Set_ErrorIrqActive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -2963,7 +3043,7 @@ usart_RequestState_t Usart_Set_ErrorIrqActive( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_ErrorIrqInactive( usart_BusId_t usartId )
+usart_RequestState_t Usart_Set_ErrorIrqInactive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -3012,7 +3092,7 @@ usart_RequestState_t Usart_Set_ErrorIrqInactive( usart_BusId_t usartId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_ErrorIrqState( usart_BusId_t usartId, usart_FlagState_t * const reqState)
+usart_RequestState_t Usart_Get_ErrorIrqState( usart_PeriphId_t usartId, usart_FlagState_t * const reqState)
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -3051,7 +3131,7 @@ usart_RequestState_t Usart_Get_ErrorIrqState( usart_BusId_t usartId, usart_FlagS
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Set_ErrorIsrCallback( usart_BusId_t usartId, usart_ErrIrqCallback_t * const callback)
+usart_RequestState_t Usart_Set_ErrorIsrCallback( usart_PeriphId_t usartId, usart_ErrIrqCallback_t * const callback)
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
@@ -3180,7 +3260,6 @@ usart_RequestState_t Usart_InitDeGpio( usart_DePin_t pinId )
     return ( retValue );
 }
 
-
 /* =========================== LOCAL FUNCTIONS ============================== */
 
 /**
@@ -3191,7 +3270,7 @@ usart_RequestState_t Usart_InitDeGpio( usart_DePin_t pinId )
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-static usart_RequestState_t Usart_Set_Prescaler( usart_BusId_t usartId, usart_Prescaler_t prescaler )
+static usart_RequestState_t Usart_Set_Prescaler( usart_PeriphId_t usartId, usart_Prescaler_t prescaler )
 {
     usart_RequestState_t retState = USART_REQUEST_ERROR;
     uint32_t             prescReg = 0u;
@@ -3235,7 +3314,7 @@ static usart_RequestState_t Usart_Set_Prescaler( usart_BusId_t usartId, usart_Pr
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-static usart_RequestState_t Usart_Get_Prescaler( usart_BusId_t usartId, usart_Prescaler_t *prescaler )
+static usart_RequestState_t Usart_Get_Prescaler( usart_PeriphId_t usartId, usart_Prescaler_t *prescaler )
 {
     usart_RequestState_t retState = USART_REQUEST_ERROR;
 
@@ -3261,7 +3340,7 @@ static usart_RequestState_t Usart_Get_Prescaler( usart_BusId_t usartId, usart_Pr
  *
  * \param usartId [in]: USART/UART bus identification
  */
-inline void Usart_GlobalIsrHandler( usart_BusId_t usartId )
+inline void Usart_GlobalIsrHandler( usart_PeriphId_t usartId )
 {
     /*----------------------------- Error interrupt --------------------------*/
     if( ( 0u != LL_USART_IsActiveFlag_PE( usart_PeriphConf[ usartId ].UsartReg )  ) ||
@@ -3453,7 +3532,7 @@ inline void Usart_GlobalIsrHandler( usart_BusId_t usartId )
  */
 void Usart_Usart1_IsrHandler()
 {
-    Usart_GlobalIsrHandler( USART_BUS_1 );
+    Usart_GlobalIsrHandler( USART_PERIPH_1 );
 }
 #endif /* USART1 */
 
@@ -3463,7 +3542,7 @@ void Usart_Usart1_IsrHandler()
  */
 void Usart_Usart2_IsrHandler()
 {
-    Usart_GlobalIsrHandler( USART_BUS_2 );
+    Usart_GlobalIsrHandler( USART_PERIPH_2 );
 }
 #endif /* USART2 */
 
@@ -3473,7 +3552,7 @@ void Usart_Usart2_IsrHandler()
  */
 void Usart_Usart3_IsrHandler()
 {
-    Usart_GlobalIsrHandler( USART_BUS_3 );
+    Usart_GlobalIsrHandler( USART_PERIPH_3 );
 }
 #endif /* USART3 */
 
@@ -3483,7 +3562,7 @@ void Usart_Usart3_IsrHandler()
  */
 void Uart_Usart4_IsrHandler()
 {
-    Usart_GlobalIsrHandler( USART_BUS_4 );
+    Usart_GlobalIsrHandler( USART_PERIPH_4 );
 }
 #endif /* UART4 */
 
@@ -3493,7 +3572,7 @@ void Uart_Usart4_IsrHandler()
  */
 void Uart_Usart5_IsrHandler(void)
 {
-    Usart_GlobalIsrHandler( USART_BUS_5 );
+    Usart_GlobalIsrHandler( USART_PERIPH_5 );
 }
 #endif /* UART5 */
 

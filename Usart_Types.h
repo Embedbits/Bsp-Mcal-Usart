@@ -112,11 +112,11 @@ typedef uint8_t usart_DeassertTime_us_t;
 
 
 /** Type representing count of transmitted data */
-typedef uint16_t usart_TxDataCnt_t;
+typedef uint16_t usart_TxDataLen_t;
 
 
 /** Type representing count of received data */
-typedef uint16_t usart_RxDataCnt_t;
+typedef uint16_t usart_RxDataLen_t;
 
 
 /** Type representing address of memory where received data shall be stored */
@@ -242,22 +242,22 @@ typedef enum
 typedef enum
 {
 #ifdef USART1
-    USART_BUS_1 = 0u, /**< USART bus 1 ID */
+    USART_PERIPH_1 = 0u, /**< USART bus 1 ID */
 #endif
 #ifdef USART2
-    USART_BUS_2,      /**< USART bus 2 ID */
+    USART_PERIPH_2,      /**< USART bus 2 ID */
 #endif
 #ifdef USART3
-    USART_BUS_3,      /**< USART bus 3 ID */
+    USART_PERIPH_3,      /**< USART bus 3 ID */
 #endif
 #ifdef UART4
-    USART_BUS_4,      /**< USART bus 4 ID */
+    USART_PERIPH_4,      /**< USART bus 4 ID */
 #endif
 #ifdef UART5
-    USART_BUS_5,      /**< USART bus 5 ID */
+    USART_PERIPH_5,      /**< USART bus 5 ID */
 #endif
     USART_BUS_CNT
-}   usart_BusId_t;
+}   usart_PeriphId_t;
 
 
 /** \brief USART data word width */
@@ -379,11 +379,22 @@ typedef enum
 /** Data transfer handling style enumeration */
 typedef enum
 {
-    USART_TRANSFER_BLOCKING = 0u, /**< Blocking style is used for data transfer. */
-    USART_TRANSFER_INTERRUPT,     /**< Interrupts are used for data transfer.    */
-    USART_TRANSFER_DMA,           /**< DMA is used for data transfer             */
-    USART_TRANSFER_CNT
-}   usart_TransferStyle_t;
+    USART_XFER_NONE = 0u, /**< No data transfer handling, user will manage data transfer. */
+    USART_XFER_BLOCKING,  /**< Blocking style is used for data transfer.                  */
+    USART_XFER_INTERRUPT, /**< Interrupts are used for data transfer.                     */
+    USART_XFER_DMA,       /**< DMA is used for data transfer                              */
+    USART_XFER_CNT
+}   usart_XferStyle_t;
+
+
+/** Data transfer priority level enumeration */
+typedef enum
+{
+    USART_TRANSFER_PRIO_LOW = 0u,
+    USART_TRANSFER_PRIO_MEDIUM,
+    USART_TRANSFER_PRIO_HIGH,
+    USART_TRANSFER_PRIO_VERYHIGH,
+}   usart_XferPrio_t;
 
 
 /** Receive register Not Empty (RxNe) interrupt callback. Received data are given as parameter. */
@@ -400,10 +411,22 @@ typedef void ( usart_IdleIrqCallback_t )( void );
 typedef void ( usart_RxTimeoutIrqCallback_t )( void );
 
 
+typedef struct
+{
+    usart_XferPrio_t   Prio;
+
+    usart_TxDataAddr_t TxDataAddr;
+    usart_RxDataAddr_t RxDataAddr;
+
+    usart_TxDataLen_t  TxDataLen;
+    usart_RxDataLen_t  RxDataLen;
+}   usart_XferConfig_t;
+
+
 /** \brief USART/UART bus configuration structure */
 typedef struct
 {
-    usart_BusId_t                 USART_Number;         /**< Specifies the USART peripheral ID. */
+    usart_PeriphId_t              PeriphId;             /**< Specifies the USART peripheral ID. */
     usart_Baudrate_t              BaudRate;             /**< This field defines expected USART/UART communication baud rate. */
     usart_DataWidth_t             DataWidth;            /**< Specifies the number of data bits transmitted or received in a frame. */
     usart_StopBits_t              StopBits;             /**< Specifies the number of stop bits transmitted. */
@@ -418,7 +441,7 @@ typedef struct
     usart_RxPinLevel_t            RxPinOperationLevels; /**< Receive pin operation mode. Can be normal or using inverted logical levels */
     usart_TxPinLevel_t            TxPinOperationLevels; /**< Transmit pin operation mode. Can be normal or using inverted logical levels */
 
-    usart_TransferStyle_t         OperationMode;
+    usart_XferStyle_t         TransferStyle;         /**< Data transfer handling style. Can be blocking, interrupt-based or using DMA. */
 
     usart_IrqPrio_t               IrqPriority;          /**< Interrupt Request (IRQ) priority */
     usart_RxNeIrqCallback_t      *RxNotEmpty_ISR;       /**< Receive Buffer Not Empty (a byte has arrived) interrupt handler */
