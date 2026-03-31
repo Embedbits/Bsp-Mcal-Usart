@@ -1975,8 +1975,8 @@ usart_RxData_t Usart_ReadData( usart_PeriphId_t usartId )
 usart_RequestState_t Usart_Set_InterruptsActive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retState               = USART_REQUEST_ERROR;
-    nvic_RequestState_t  nvicActivationState    = NVIC_STATE_ERROR;
-    nvic_RequestState_t  nvicHandlerConfigState = NVIC_STATE_ERROR;
+    nvic_RequestState_t  nvicActivationState    = NVIC_REQUEST_ERROR;
+    nvic_RequestState_t  nvicHandlerConfigState = NVIC_REQUEST_ERROR;
 
     if( USART_BUS_CNT > usartId )
     {
@@ -1985,8 +1985,8 @@ usart_RequestState_t Usart_Set_InterruptsActive( usart_PeriphId_t usartId )
 
         nvicActivationState = Nvic_Set_PeriphIrq_Active( usart_PeriphConf[ usartId ].PeriphNvic );
 
-        if( ( NVIC_STATE_OK != nvicActivationState    ) ||
-            ( NVIC_STATE_OK != nvicHandlerConfigState )    )
+        if( ( NVIC_REQUEST_OK != nvicActivationState    ) ||
+            ( NVIC_REQUEST_OK != nvicHandlerConfigState )    )
         {
             retState  = USART_REQUEST_ERROR;
         }
@@ -2015,13 +2015,13 @@ usart_RequestState_t Usart_Set_InterruptsActive( usart_PeriphId_t usartId )
 usart_RequestState_t Usart_Set_InterruptsInactive( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retState  = USART_REQUEST_ERROR;
-    nvic_RequestState_t  nvicState = NVIC_STATE_ERROR;
+    nvic_RequestState_t  nvicState = NVIC_REQUEST_ERROR;
 
     if( USART_BUS_CNT > usartId )
     {
         nvicState = Nvic_Set_PeriphIrq_Inactive( usart_PeriphConf[ usartId ].PeriphNvic );
 
-        if( NVIC_STATE_OK != nvicState )
+        if( NVIC_REQUEST_OK != nvicState )
         {
             retState  = USART_REQUEST_ERROR;
         }
@@ -2050,13 +2050,13 @@ usart_RequestState_t Usart_Set_InterruptsInactive( usart_PeriphId_t usartId )
 usart_RequestState_t Usart_Set_IrqPriority( usart_PeriphId_t usartId, usart_IrqPrio_t irqPrio )
 {
     usart_RequestState_t retState  = USART_REQUEST_ERROR;
-    nvic_RequestState_t      nvicState = NVIC_STATE_ERROR;
+    nvic_RequestState_t      nvicState = NVIC_REQUEST_ERROR;
 
     if( USART_BUS_CNT > usartId )
     {
         nvicState = Nvic_Set_PeriphIrq_Prio( usart_PeriphConf[ usartId ].PeriphNvic, irqPrio );
 
-        if( NVIC_STATE_OK != nvicState )
+        if( NVIC_REQUEST_OK != nvicState )
         {
             retState  = USART_REQUEST_ERROR;
         }
@@ -2085,14 +2085,14 @@ usart_RequestState_t Usart_Set_IrqPriority( usart_PeriphId_t usartId, usart_IrqP
 usart_RequestState_t Usart_Get_IrqPriority( usart_PeriphId_t usartId, usart_IrqPrio_t * const irqPrio )
 {
     usart_RequestState_t retState  = USART_REQUEST_ERROR;
-    nvic_RequestState_t      nvicState = NVIC_STATE_ERROR;
+    nvic_RequestState_t      nvicState = NVIC_REQUEST_ERROR;
 
     if( ( USART_BUS_CNT       > usartId ) &&
         ( USART_NULL_PTR != irqPrio )    )
     {
         nvicState = Nvic_Get_PeriphIrq_Prio( usart_PeriphConf[ usartId ].PeriphNvic, irqPrio );
 
-        if( NVIC_STATE_OK != nvicState )
+        if( NVIC_REQUEST_OK != nvicState )
         {
             retState  = USART_REQUEST_ERROR;
         }
