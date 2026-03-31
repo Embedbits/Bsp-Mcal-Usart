@@ -1,4 +1,4 @@
-# Template version: 1.0.1
+# Template version: 0.0.1
 # Sets the version of CMakeLists.txt file.
 # Never, under any circumstances, change this line. It is used by
 # the module generation script to identify the template version.
