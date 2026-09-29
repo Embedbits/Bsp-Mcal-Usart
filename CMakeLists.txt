@@ -19,6 +19,9 @@ set( Usart_PrivateIncludeDirs
 # Source files list for current library generation
 set( Usart_SourceFiles
     Usart.c
+    Usart_Dma.c
+    Usart_Isr.c
+    Usart_Poll.c
 )
 
 

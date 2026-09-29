@@ -1009,16 +1009,6 @@ typedef enum
 }   usart_IrqList_t;
 
 
-/** Data transfer handling style enumeration */
-typedef enum
-{
-    USART_TRANSFER_BLOCKING = 0u, /**< Blocking style is used for data transfer. */
-    USART_TRANSFER_INTERRUPT,     /**< Interrupts are used for data transfer.    */
-    USART_TRANSFER_DMA,           /**< DMA is used for data transfer             */
-    USART_TRANSFER_CNT
-}   usart_TransferStyle_t;
-
-
 /** DMA peripherals enumeration list */
 typedef enum
 {
@@ -1057,52 +1047,116 @@ typedef enum
 }   usart_DmaPriority_t;
 
 
-/** Receive register Not Empty (RxNe) interrupt callback. Received data are given as parameter. */
-typedef void ( usart_RxNeIrqCallback_t )( uint16_t rxData );
-/** Error (Err) interrupt callback. Error ID is given as parameter. */
-typedef void ( usart_ErrIrqCallback_t )( usart_Error_t errMask );
-/** Receive register Not Empty (RxNe) interrupt callback */
-typedef void ( usart_TxeIrqCallback_t )( void );
-/** Transmit Complete (Tc) interrupt callback */
-typedef void ( usart_TcIrqCallback_t )( void );
-/** Idle line detected (IdleNe) interrupt callback */
-typedef void ( usart_IdleIrqCallback_t )( void );
-/** Receiver Timeout detection (RxTimeout) interrupt callback */
-typedef void ( usart_RxTimeoutIrqCallback_t )( void );
+/* -------------------------------------------------------------------------- */
+/* ---------------------- Data handling configuration ----------------------- */
+/* -------------------------------------------------------------------------- */
 
-typedef void (usart_DmaCallback)(void);
-
+/**
+ * \brief List of data transfer modes (selected separately for transmission and reception)
+ *
+ * All modes use the same buffers and report the same events through the same callbacks - they
+ * differ only in the context moving the data:
+ * - DMA:  GPDMA channel (callbacks from GPDMA / USART interrupt)
+ * - ISR:  USART interrupt service routine (callbacks from USART interrupt)
+ * - POLL: Usart_Task() polling USART flags (callbacks from Usart_Task() context)
+ */
 typedef enum
 {
-    USART_DMA_ERROR_TRANSFER      = GPDMA_ERROR_TRANSFER     , /**< Error during transfer             */
-    USART_DMA_ERROR_CONFIG_UPDATE = GPDMA_ERROR_CONFIG_UPDATE, /**< Error during configuration update */
-    USART_DMA_ERROR_CONFIG_ERROR  = GPDMA_ERROR_CONFIG_ERROR , /**< Error in transfer configuration   */
-    USART_DMA_ERROR_TRIG_OVERRUN  = GPDMA_ERROR_TRIG_OVERRUN , /**< Trigger overrun error             */
-}   usart_DmaErrId_t;
+    USART_XFER_MODE_NONE = 0u, /**< Direction is not used by data handling                        */
+    USART_XFER_MODE_DMA,       /**< Data are transferred by DMA                                   */
+    USART_XFER_MODE_ISR,       /**< Data are transferred by USART interrupt service routine       */
+    USART_XFER_MODE_POLL,      /**< Data are transferred by Usart_Task() (polling of USART flags) */
+    USART_XFER_MODE_CNT        /**< Count of data transfer modes                                  */
+}   usart_XferMode_t;
 
-typedef void (usart_DmaErrCallback_t)(usart_DmaErrId_t);
+
+/** \brief List of receive buffer handling modes */
+typedef enum
+{
+    USART_BUFFER_MODE_ONE_SHOT = 0u, /**< Reception stops when the buffer is full or the message ended */
+    USART_BUFFER_MODE_CIRCULAR,      /**< Reception continues from the buffer start when it is full   */
+    USART_BUFFER_MODE_CNT            /**< Count of buffer modes                                        */
+}   usart_BufferMode_t;
 
 
+/** \brief List of end of received message detection methods */
+typedef enum
+{
+    USART_RX_END_NONE = 0u, /**< End of message is not detected (buffer size driven reception)      */
+    USART_RX_END_IDLE,      /**< Idle line (one frame without activity) after received data          */
+    USART_RX_END_TIMEOUT,   /**< Receiver timeout (RxTimeoutValue bits without activity) - RTO must be
+                                 enabled by \ref usart_BusConfig_t RxTimeoutValue                   */
+    USART_RX_END_CNT        /**< Count of end of message detection methods                           */
+}   usart_RxEndMode_t;
+
+
+/** \brief List of data transfer errors reported through \ref usart_XferErrCallback_t */
+typedef enum
+{
+    USART_XFER_ERROR_PARITY = 0u,        /**< Parity error (PE)                                   */
+    USART_XFER_ERROR_FRAMING,            /**< Framing error (FE)                                  */
+    USART_XFER_ERROR_NOISE,              /**< Noise detected (NE)                                 */
+    USART_XFER_ERROR_OVERRUN,            /**< Overrun - received data were not read in time (ORE) */
+    USART_XFER_ERROR_DMA_TRANSFER,       /**< DMA transfer error (bus error during transfer)      */
+    USART_XFER_ERROR_DMA_CONFIG,         /**< DMA configuration error                             */
+    USART_XFER_ERROR_DMA_CONFIG_UPDATE,  /**< DMA configuration (linked list) update error        */
+    USART_XFER_ERROR_DMA_TRIGGER_OVERRUN,/**< DMA trigger overrun                                 */
+    USART_XFER_ERROR_CNT                 /**< Count of data transfer errors                       */
+}   usart_XferErrorId_t;
+
+
+/** \brief Data transfer event callback (transmission complete, receive buffer half / full) */
+typedef void ( usart_XferCallback_t )( void );
+
+/** \brief End of received message callback, count of received bytes in RxBuffer is given as parameter */
+typedef void ( usart_RxEndCallback_t )( usart_RxDataCnt_t rxCnt );
+
+/** \brief Data transfer error callback, error identification is given as parameter */
+typedef void ( usart_XferErrCallback_t )( usart_XferErrorId_t errorId );
+
+
+/**
+ * \brief Data handling configuration (common for DMA, ISR and POLL mode)
+ *
+ * Transmission and reception use independent modes. Callback events (equal in all modes):
+ * - TxCompleteCallback: all bytes given to Usart_Set_TxStart() were transmitted (last stop bit
+ *                       sent - transmission complete flag)
+ * - RxHalfCallback:     RxBufferSize / 2 bytes were stored into RxBuffer
+ * - RxCompleteCallback: RxBufferSize bytes were stored into RxBuffer (in circular mode the next
+ *                       byte is stored to RxBuffer[ 0 ])
+ * - RxEndCallback:      end of message detected (RxEndMode), parameter is count of bytes stored in
+ *                       RxBuffer from the reception start (one shot) / write position (circular)
+ * - ErrorCallback:      reception error or DMA error (\ref usart_XferErrorId_t)
+ *
+ * In one shot buffer mode the reception stops when the buffer is full or the end of message is
+ * detected and is restarted by Usart_Set_RxStart(). Unused callback shall be set to
+ * USART_NULL_PTR. DMA identifications / priorities are used only in USART_XFER_MODE_DMA of the
+ * given direction, IrqPriority is used if any direction uses DMA or ISR mode.
+ *
+ * \note  Data are handled as 8-bit values (usart_TxData_t / usart_RxData_t) - 9-bit frames
+ *        without parity are not supported.
+ */
 typedef struct
 {
-    /* Reception configuration. If unused set TxDmaPeriphId to USART_DMA_PERIPH_CNT */
-    usart_DmaPeriphId_t           TxDmaPeriphId;        /**< DMA peripheral identification used for data transmission */
-    usart_DmaChannelId_t          TxDmaChannelId;       /**< DMA channel identification used for data transmission */
-    usart_DmaPriority_t           TxDmaPriority;
-
-    usart_DmaCallback            *TxTransferCompleteCallback;
-    usart_DmaCallback            *TxHalfTransferCallback;
-    usart_DmaErrCallback_t       *TxErrorCallback;
-
-    /* Reception configuration. If unused set RxDmaPeriphId to USART_DMA_PERIPH_CNT */
-    usart_DmaPeriphId_t           RxDmaPeriphId;        /**< DMA peripheral identification used for data reception */
-    usart_DmaChannelId_t          RxDmaChannelId;       /**< DMA channel identification used for data reception */
-    usart_DmaPriority_t           RxDmaPriority;
-
-    usart_DmaCallback            *RxTransferCompleteCallback;
-    usart_DmaCallback            *RxHalfTransferCallback;
-    usart_DmaErrCallback_t       *RxErrorCallback;
-}   usart_DmaConfig_t;
+    usart_XferMode_t          TxMode;             /**< Transmission mode (NONE / DMA / ISR / POLL)                    */
+    usart_XferMode_t          RxMode;             /**< Reception mode (NONE / DMA / ISR / POLL)                       */
+    usart_RxData_t           *RxBuffer;           /**< Receive buffer (reception used). Must stay valid.              */
+    usart_RxDataCnt_t         RxBufferSize;       /**< Receive buffer size in bytes (> 0)                             */
+    usart_BufferMode_t        RxBufferMode;       /**< One shot / circular receive buffer                             */
+    usart_RxEndMode_t         RxEndMode;          /**< End of received message detection                              */
+    usart_DmaPeriphId_t       TxDmaPeriphId;      /**< DMA peripheral (transmission in DMA mode)                      */
+    usart_DmaChannelId_t      TxDmaChannelId;     /**< DMA channel (transmission in DMA mode)                         */
+    usart_DmaPriority_t       TxDmaPriority;      /**< DMA channel priority (transmission in DMA mode)                */
+    usart_DmaPeriphId_t       RxDmaPeriphId;      /**< DMA peripheral (reception in DMA mode)                         */
+    usart_DmaChannelId_t      RxDmaChannelId;     /**< DMA channel (reception in DMA mode)                            */
+    usart_DmaPriority_t       RxDmaPriority;      /**< DMA channel priority (reception in DMA mode)                   */
+    usart_IrqPrio_t           IrqPriority;        /**< USART interrupt priority (DMA / ISR mode)                      */
+    usart_XferCallback_t     *TxCompleteCallback; /**< Transmission complete. USART_NULL_PTR if not used.             */
+    usart_XferCallback_t     *RxHalfCallback;     /**< Receive buffer half filled. USART_NULL_PTR if not used.        */
+    usart_XferCallback_t     *RxCompleteCallback; /**< Receive buffer filled. USART_NULL_PTR if not used.             */
+    usart_RxEndCallback_t    *RxEndCallback;      /**< End of received message. USART_NULL_PTR if not used.          */
+    usart_XferErrCallback_t  *ErrorCallback;      /**< Data transfer error. USART_NULL_PTR if not used.               */
+}   usart_DataConfig_t;
 
 
 /** \brief USART/UART bus configuration structure */
@@ -1123,17 +1177,7 @@ typedef struct
     usart_RxPinLevel_t            RxPinOperationLevels; /**< Receive pin operation mode. Can be normal or using inverted logical levels */
     usart_TxPinLevel_t            TxPinOperationLevels; /**< Transmit pin operation mode. Can be normal or using inverted logical levels */
 
-    usart_TransferStyle_t         OperationMode;
-
-    usart_DmaConfig_t            *DmaConfiguration;
-
-    usart_IrqPrio_t               IrqPriority;          /**< Interrupt Request (IRQ) priority */
-    usart_RxNeIrqCallback_t      *RxNotEmpty_ISR;       /**< Receive Buffer Not Empty (a byte has arrived) interrupt handler */
-    usart_TxeIrqCallback_t       *TransmitEmpty_ISR;    /**< Transmit Buffer Empty interrupt handler */
-    usart_TcIrqCallback_t        *TransferComplete_ISR; /**< Transmit Complete (a byte transmit finished) interrupt handler */
-    usart_ErrIrqCallback_t       *Error_ISR;            /**< Receiver/Transmitter error handler */
-    usart_IdleIrqCallback_t      *Idle_ISR;             /**< IDLE state handler */
-    usart_RxTimeoutIrqCallback_t *RxTimeout_ISR;        /**< Receive timeout detected interrupt handler */
+    const usart_DataConfig_t     *DataConfig;           /**< Data handling configuration (copied). USART_NULL_PTR - data handling is not initialized */
 
     usart_RxPin_t                 BusRxPin;             /**< RX GPIO pin used by peripheral                 */
     usart_TxPin_t                 BusTxPin;             /**< TX GPIO pin used by peripheral                 */

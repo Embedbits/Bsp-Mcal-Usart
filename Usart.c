@@ -10,6 +10,9 @@
 #include "Usart.h"                          /* Self include                   */
 #include "Usart_Port.h"                     /* Own port file include          */
 #include "Usart_Types.h"                    /* Module types definitions       */
+#include "Usart_Dma.h"                      /* DMA data transfer handler      */
+#include "Usart_Isr.h"                      /* ISR data transfer handler      */
+#include "Usart_Poll.h"                     /* Polling data transfer handler  */
 #include "Stm32_usart.h"                    /* USART RAL functionality        */
 #include "Gpio_Port.h"                      /* GPIO handler functionality     */
 #include "Gpdma_Port.h"                     /* DMA handler functionality      */
@@ -27,26 +30,6 @@ typedef struct
     gpdma_PeriphReqId_t  PeriphDmaTxReq; /**< DMA transfer request ID for transmission */
     gpdma_PeriphReqId_t  PeriphDmaRxReq; /**< DMA transfer request ID for reception    */
 }   usart_PeriphConfigStruct_t;
-
-/** Structure type used to store users USART/UART ISR callback pointers */
-typedef struct
-{
-    usart_PeriphId_t              PeriphId;
-    usart_TransferStyle_t         TransferStyle;
-    usart_DmaPeriphId_t           DmaTxPeriphId;
-    usart_DmaChannelId_t          DmaTxChannelId;
-    usart_DmaPeriphId_t           DmaRxPeriphId;
-    usart_DmaChannelId_t          DmaRxChannelId;
-    usart_RxNeIrqCallback_t      *RxNotEmptyIsr;
-    usart_ErrIrqCallback_t       *ErrorIsr;
-    usart_TxeIrqCallback_t       *TxEmptyIsr;
-    usart_TcIrqCallback_t        *TransferCompleteIsr;
-    usart_IdleIrqCallback_t      *IdleIsr;
-    usart_RxTimeoutIrqCallback_t *RxTimeoutIsr;
-
-    gpdma_XferList_t              TxTransferList;
-    gpdma_XferList_t              RxTransferList;
-}   usart_RuntimeConfigStruct_t;
 
 /* ======================== FORWARD DECLARATIONS ============================ */
 
@@ -97,6 +80,15 @@ static usart_RequestState_t Usart_Get_ExpectedPrescaler( usart_PeriphId_t usartI
                                                          usart_Baudrate_t baudrate,
                                                          usart_Prescaler_t *prescaler );
 
+static usart_RequestState_t Usart_Check_DataConfig   ( usart_PeriphId_t usartId, const usart_DataConfig_t * const dataConfig );
+static usart_RequestState_t Usart_Set_XferInit       ( usart_PeriphId_t usartId, const usart_DataConfig_t * const dataConfig );
+static usart_RequestState_t Usart_Set_XferDeinit     ( usart_PeriphId_t usartId );
+static usart_FunctionState_t Usart_Get_IrqUsed       ( const usart_DataConfig_t * const dataConfig );
+
+static usart_RequestState_t Usart_None_Check_Config  ( usart_PeriphId_t usartId, const usart_DataConfig_t * const dataConfig );
+static usart_RequestState_t Usart_None_XferInit      ( usart_PeriphId_t usartId );
+static usart_RequestState_t Usart_None_XferStart     ( usart_PeriphId_t usartId );
+
 /* ========================== SYMBOLIC CONSTANTS ============================ */
 
 /** Value of major version of SW module */
@@ -108,8 +100,17 @@ static usart_RequestState_t Usart_Get_ExpectedPrescaler( usart_PeriphId_t usartI
 /** Value of patch version of SW module */
 #define USART_PATCH_VERSION           ( 0u )
 
-/** Maximum timeout for system reaction to request */
-#define USART_TIMEOUT_RAW             ( 0x84FCB )
+/** Default baud-rate used by \ref Usart_Get_DefaultConfig */
+#define USART_DEFAULT_BAUDRATE        ( 115200u )
+
+/** Receive buffer half is reached after RxBufferSize / USART_BUFFER_HALF_DIVIDER bytes */
+#define USART_BUFFER_HALF_DIVIDER     ( 2u )
+
+/** Samples per bit with 8x oversampling */
+#define USART_OVERSAMPLING_8_FACTOR   ( 8u )
+
+/** Samples per bit with 16x oversampling */
+#define USART_OVERSAMPLING_16_FACTOR  ( 16u )
 
 /* =============================== MACROS =================================== */
 
@@ -119,50 +120,6 @@ static usart_RequestState_t Usart_Get_ExpectedPrescaler( usart_PeriphId_t usartI
 /* ========================== EXPORTED VARIABLES ============================ */
 
 /* =========================== LOCAL VARIABLES ============================== */
-
-/** USART/UART peripherals runtime data array */
-static volatile usart_RuntimeConfigStruct_t     usart_RuntimeData[ ] =
-{
-#ifdef USART1
-    { .PeriphId = USART_BUS_1, .TransferStyle = USART_TRANSFER_BLOCKING, .DmaTxPeriphId = USART_DMA_PERIPH_CNT, .DmaTxChannelId = USART_DMA_CHANNEL_CNT, .DmaRxPeriphId = USART_DMA_PERIPH_CNT, .DmaRxChannelId = USART_DMA_CHANNEL_CNT, .RxNotEmptyIsr = USART_NULL_PTR, .ErrorIsr = USART_NULL_PTR, .TxEmptyIsr = USART_NULL_PTR, .TransferCompleteIsr = USART_NULL_PTR, .IdleIsr = USART_NULL_PTR, .RxTimeoutIsr = USART_NULL_PTR },
-#endif
-#ifdef USART2
-    { .PeriphId = USART_BUS_2, .TransferStyle = USART_TRANSFER_BLOCKING, .DmaTxPeriphId = USART_DMA_PERIPH_CNT, .DmaTxChannelId = USART_DMA_CHANNEL_CNT, .DmaRxPeriphId = USART_DMA_PERIPH_CNT, .DmaRxChannelId = USART_DMA_CHANNEL_CNT, .RxNotEmptyIsr = USART_NULL_PTR, .ErrorIsr = USART_NULL_PTR, .TxEmptyIsr = USART_NULL_PTR, .TransferCompleteIsr = USART_NULL_PTR, .IdleIsr = USART_NULL_PTR, .RxTimeoutIsr = USART_NULL_PTR },
-#endif
-#ifdef USART3
-    { .PeriphId = USART_BUS_3, .TransferStyle = USART_TRANSFER_BLOCKING, .DmaTxPeriphId = USART_DMA_PERIPH_CNT, .DmaTxChannelId = USART_DMA_CHANNEL_CNT, .DmaRxPeriphId = USART_DMA_PERIPH_CNT, .DmaRxChannelId = USART_DMA_CHANNEL_CNT, .RxNotEmptyIsr = USART_NULL_PTR, .ErrorIsr = USART_NULL_PTR, .TxEmptyIsr = USART_NULL_PTR, .TransferCompleteIsr = USART_NULL_PTR, .IdleIsr = USART_NULL_PTR, .RxTimeoutIsr = USART_NULL_PTR },
-#endif
-#ifdef UART4
-    { .PeriphId = USART_BUS_4, .TransferStyle = USART_TRANSFER_BLOCKING, .DmaTxPeriphId = USART_DMA_PERIPH_CNT, .DmaTxChannelId = USART_DMA_CHANNEL_CNT, .DmaRxPeriphId = USART_DMA_PERIPH_CNT, .DmaRxChannelId = USART_DMA_CHANNEL_CNT, .RxNotEmptyIsr = USART_NULL_PTR, .ErrorIsr = USART_NULL_PTR, .TxEmptyIsr = USART_NULL_PTR, .TransferCompleteIsr = USART_NULL_PTR, .IdleIsr = USART_NULL_PTR, .RxTimeoutIsr = USART_NULL_PTR },
-#endif
-#ifdef UART5
-    { .PeriphId = USART_BUS_5, .TransferStyle = USART_TRANSFER_BLOCKING, .DmaTxPeriphId = USART_DMA_PERIPH_CNT, .DmaTxChannelId = USART_DMA_CHANNEL_CNT, .DmaRxPeriphId = USART_DMA_PERIPH_CNT, .DmaRxChannelId = USART_DMA_CHANNEL_CNT, .RxNotEmptyIsr = USART_NULL_PTR, .ErrorIsr = USART_NULL_PTR, .TxEmptyIsr = USART_NULL_PTR, .TransferCompleteIsr = USART_NULL_PTR, .IdleIsr = USART_NULL_PTR, .RxTimeoutIsr = USART_NULL_PTR },
-#endif
-#ifdef USART6
-    { .PeriphId = USART_BUS_6, .TransferStyle = USART_TRANSFER_BLOCKING, .DmaTxPeriphId = USART_DMA_PERIPH_CNT, .DmaTxChannelId = USART_DMA_CHANNEL_CNT, .DmaRxPeriphId = USART_DMA_PERIPH_CNT, .DmaRxChannelId = USART_DMA_CHANNEL_CNT, .RxNotEmptyIsr = USART_NULL_PTR, .ErrorIsr = USART_NULL_PTR, .TxEmptyIsr = USART_NULL_PTR, .TransferCompleteIsr = USART_NULL_PTR, .IdleIsr = USART_NULL_PTR, .RxTimeoutIsr = USART_NULL_PTR },
-#endif
-#ifdef UART7
-    { .PeriphId = USART_BUS_7, .TransferStyle = USART_TRANSFER_BLOCKING, .DmaTxPeriphId = USART_DMA_PERIPH_CNT, .DmaTxChannelId = USART_DMA_CHANNEL_CNT, .DmaRxPeriphId = USART_DMA_PERIPH_CNT, .DmaRxChannelId = USART_DMA_CHANNEL_CNT, .RxNotEmptyIsr = USART_NULL_PTR, .ErrorIsr = USART_NULL_PTR, .TxEmptyIsr = USART_NULL_PTR, .TransferCompleteIsr = USART_NULL_PTR, .IdleIsr = USART_NULL_PTR, .RxTimeoutIsr = USART_NULL_PTR },
-#endif
-#ifdef UART8
-    { .PeriphId = USART_BUS_8, .TransferStyle = USART_TRANSFER_BLOCKING, .DmaTxPeriphId = USART_DMA_PERIPH_CNT, .DmaTxChannelId = USART_DMA_CHANNEL_CNT, .DmaRxPeriphId = USART_DMA_PERIPH_CNT, .DmaRxChannelId = USART_DMA_CHANNEL_CNT, .RxNotEmptyIsr = USART_NULL_PTR, .ErrorIsr = USART_NULL_PTR, .TxEmptyIsr = USART_NULL_PTR, .TransferCompleteIsr = USART_NULL_PTR, .IdleIsr = USART_NULL_PTR, .RxTimeoutIsr = USART_NULL_PTR },
-#endif
-#ifdef UART9
-    { .PeriphId = USART_BUS_9, .TransferStyle = USART_TRANSFER_BLOCKING, .DmaTxPeriphId = USART_DMA_PERIPH_CNT, .DmaTxChannelId = USART_DMA_CHANNEL_CNT, .DmaRxPeriphId = USART_DMA_PERIPH_CNT, .DmaRxChannelId = USART_DMA_CHANNEL_CNT, .RxNotEmptyIsr = USART_NULL_PTR, .ErrorIsr = USART_NULL_PTR, .TxEmptyIsr = USART_NULL_PTR, .TransferCompleteIsr = USART_NULL_PTR, .IdleIsr = USART_NULL_PTR, .RxTimeoutIsr = USART_NULL_PTR },
-#endif
-#ifdef USART10
-    { .PeriphId = USART_BUS_10, .TransferStyle = USART_TRANSFER_BLOCKING, .DmaTxPeriphId = USART_DMA_PERIPH_CNT, .DmaTxChannelId = USART_DMA_CHANNEL_CNT, .DmaRxPeriphId = USART_DMA_PERIPH_CNT, .DmaRxChannelId = USART_DMA_CHANNEL_CNT, .RxNotEmptyIsr = USART_NULL_PTR, .ErrorIsr = USART_NULL_PTR, .TxEmptyIsr = USART_NULL_PTR, .TransferCompleteIsr = USART_NULL_PTR, .IdleIsr = USART_NULL_PTR, .RxTimeoutIsr = USART_NULL_PTR },
-#endif
-#ifdef USART11
-    { .PeriphId = USART_BUS_11, .TransferStyle = USART_TRANSFER_BLOCKING, .DmaTxPeriphId = USART_DMA_PERIPH_CNT, .DmaTxChannelId = USART_DMA_CHANNEL_CNT, .DmaRxPeriphId = USART_DMA_PERIPH_CNT, .DmaRxChannelId = USART_DMA_CHANNEL_CNT, .RxNotEmptyIsr = USART_NULL_PTR, .ErrorIsr = USART_NULL_PTR, .TxEmptyIsr = USART_NULL_PTR, .TransferCompleteIsr = USART_NULL_PTR, .IdleIsr = USART_NULL_PTR, .RxTimeoutIsr = USART_NULL_PTR },
-#endif
-#ifdef UART12
-    { .PeriphId = USART_BUS_12, .TransferStyle = USART_TRANSFER_BLOCKING, .DmaTxPeriphId = USART_DMA_PERIPH_CNT, .DmaTxChannelId = USART_DMA_CHANNEL_CNT, .DmaRxPeriphId = USART_DMA_PERIPH_CNT, .DmaRxChannelId = USART_DMA_CHANNEL_CNT, .RxNotEmptyIsr = USART_NULL_PTR, .ErrorIsr = USART_NULL_PTR, .TxEmptyIsr = USART_NULL_PTR, .TransferCompleteIsr = USART_NULL_PTR, .IdleIsr = USART_NULL_PTR, .RxTimeoutIsr = USART_NULL_PTR },
-#endif
-};
-
-_Static_assert( USART_BUS_CNT == ( (sizeof(usart_RuntimeData) / sizeof(usart_RuntimeConfigStruct_t) ) ), "Usart: size of usart_RuntimeData is incorrect.");
-
 
 /** USART/UART peripherals configuration array */
 static usart_PeriphConfigStruct_t const         usart_PeriphConf[ ] =
@@ -207,6 +164,44 @@ static usart_PeriphConfigStruct_t const         usart_PeriphConf[ ] =
 
 _Static_assert( USART_BUS_CNT == ( (sizeof(usart_PeriphConf) / sizeof(usart_PeriphConfigStruct_t) ) ), "Usart: size of usart_PeriphConf is incorrect.");
 
+
+/** \brief Data handling runtime context per peripheral */
+static usart_XferContext_t usart_XferContext[ USART_BUS_CNT ];
+
+
+/** \brief usart_XferMode_t -> transmission mode handler */
+static const usart_XferModeIf_t usart_TxModeLut[ USART_XFER_MODE_CNT ] =
+{
+    [USART_XFER_MODE_NONE] = { .CheckConfig = Usart_None_Check_Config,  .Init = Usart_None_XferInit,  .Deinit = Usart_None_XferInit,   .Start = Usart_None_XferStart, .Stop = Usart_None_XferInit },
+    [USART_XFER_MODE_DMA]  = { .CheckConfig = Usart_Dma_Check_TxConfig, .Init = Usart_Dma_TxInit,     .Deinit = Usart_Dma_TxDeinit,    .Start = Usart_Dma_TxStart,    .Stop = Usart_Dma_TxStop    },
+    [USART_XFER_MODE_ISR]  = { .CheckConfig = Usart_Isr_Check_Config,   .Init = Usart_Isr_XferInit,   .Deinit = Usart_Isr_XferDeinit,  .Start = Usart_Isr_TxStart,    .Stop = Usart_Isr_TxStop    },
+    [USART_XFER_MODE_POLL] = { .CheckConfig = Usart_Poll_Check_Config,  .Init = Usart_Poll_XferInit,  .Deinit = Usart_Poll_XferDeinit, .Start = Usart_Poll_TxStart,   .Stop = Usart_Poll_TxStop   },
+};
+
+
+/** \brief usart_XferMode_t -> reception mode handler */
+static const usart_XferModeIf_t usart_RxModeLut[ USART_XFER_MODE_CNT ] =
+{
+    [USART_XFER_MODE_NONE] = { .CheckConfig = Usart_None_Check_Config,  .Init = Usart_None_XferInit,  .Deinit = Usart_None_XferInit,   .Start = Usart_None_XferStart, .Stop = Usart_None_XferInit },
+    [USART_XFER_MODE_DMA]  = { .CheckConfig = Usart_Dma_Check_RxConfig, .Init = Usart_Dma_RxInit,     .Deinit = Usart_Dma_RxDeinit,    .Start = Usart_Dma_RxStart,    .Stop = Usart_Dma_RxStop    },
+    [USART_XFER_MODE_ISR]  = { .CheckConfig = Usart_Isr_Check_Config,   .Init = Usart_Isr_XferInit,   .Deinit = Usart_Isr_XferDeinit,  .Start = Usart_Isr_RxStart,    .Stop = Usart_Isr_RxStop    },
+    [USART_XFER_MODE_POLL] = { .CheckConfig = Usart_Poll_Check_Config,  .Init = Usart_Poll_XferInit,  .Deinit = Usart_Poll_XferDeinit, .Start = Usart_Poll_RxStart,   .Stop = Usart_Poll_RxStop   },
+};
+
+
+/** \brief usart_XferErrorId_t -> reception error flag in USART ISR register (DMA errors have no flag) */
+static const usart_Error_t usart_RxErrorFlagLut[ USART_XFER_ERROR_CNT ] =
+{
+    [USART_XFER_ERROR_PARITY]              = USART_ERROR_PARITY_ERROR,
+    [USART_XFER_ERROR_FRAMING]             = USART_ERROR_FRAMING_ERROR,
+    [USART_XFER_ERROR_NOISE]               = USART_ERROR_NOISE_DETECTED,
+    [USART_XFER_ERROR_OVERRUN]             = USART_ERROR_OVERRUN,
+    [USART_XFER_ERROR_DMA_TRANSFER]        = USART_ERROR_NONE,
+    [USART_XFER_ERROR_DMA_CONFIG]          = USART_ERROR_NONE,
+    [USART_XFER_ERROR_DMA_CONFIG_UPDATE]   = USART_ERROR_NONE,
+    [USART_XFER_ERROR_DMA_TRIGGER_OVERRUN] = USART_ERROR_NONE,
+};
+
 /* ========================= EXPORTED FUNCTIONS ============================= */
 
 /**
@@ -229,18 +224,25 @@ usart_ModuleVersion_t Usart_Get_ModuleVersion( void )
 /**
  * \brief USART/UART bus initialization through configuration structure
  *
- * \param usartConfig [in]: Pointer to configuration structure
- * \return State of request execution. Returns "OK" if request was success,
- *         otherwise return error.
+ * Data handling of a previous initialization is released, the peripheral is reset and
+ * configured, enabled and the data handling is initialized (if DataConfig is set).
+ *
+ * \param usartConfig [in]: Pointer to configuration structure. Must not be NULL.
+ * \return State of request execution. Returns \ref USART_REQUEST_OK if request was
+ *         success, otherwise returns \ref USART_REQUEST_ERROR.
  */
 usart_RequestState_t Usart_Init( usart_BusConfig_t * const usartConfig )
 {
     usart_RequestState_t retState = USART_REQUEST_OK;
 
-    if( USART_NULL_PTR != usartConfig )
+    if( ( USART_NULL_PTR != usartConfig           ) &&
+        ( USART_BUS_CNT   > usartConfig->PeriphId )    )
     {
         rcc_FunctionState_t rccActivationState = RCC_FUNCTION_INACTIVE;
         rcc_RequestState_t  rccRequestState    = RCC_REQUEST_ERROR;
+
+        /*------------- Data handling of previous initialization -------------*/
+        retState = Usart_Set_XferDeinit( usartConfig->PeriphId );
 
         /*------------- USART peripheral clock activation section ------------*/
         rccRequestState = Rcc_Get_PeriphState( usart_PeriphConf[ usartConfig->PeriphId ].PeriphRcc, &rccActivationState );
@@ -383,30 +385,22 @@ usart_RequestState_t Usart_Init( usart_BusConfig_t * const usartConfig )
 
         if( USART_REQUEST_ERROR != retState )
         {
-            if( USART_NULL_PTR != usartConfig->DmaConfiguration )
-            {
-                retState = Usart_Init_Dma( usartConfig->PeriphId, usartConfig->DmaConfiguration );
-
-                if( USART_REQUEST_OK != retState )
-                {
-                    return ( retState );
-                }
-            }
+            retState = Usart_Set_PeriphActive( usartConfig->PeriphId );
+        }
+        else
+        {
+            /* Error during initialization process */
         }
 
-        if( USART_REQUEST_ERROR != retState )
+        /*------------------ Data handling initialization ------------------*/
+        if( ( USART_REQUEST_ERROR != retState                ) &&
+            ( USART_NULL_PTR      != usartConfig->DataConfig )    )
         {
-            Usart_Set_PeriphActive( usartConfig->PeriphId );
-
-            Usart_Set_IrqPriority( usartConfig->PeriphId, usartConfig->IrqPriority );
-
-            /* Return states of following functions are not checked. User do not need to strictly configure those options */
-            ( void ) Usart_Set_RxNotEmptyIsrCallback( usartConfig->PeriphId, usartConfig->RxNotEmpty_ISR       );
-            ( void ) Usart_Set_TxEmptyIsrCallback   ( usartConfig->PeriphId, usartConfig->TransmitEmpty_ISR    );
-            ( void ) Usart_Set_TxCompleteIsrCallback( usartConfig->PeriphId, usartConfig->TransferComplete_ISR );
-            ( void ) Usart_Set_IdleIsrCallback      ( usartConfig->PeriphId, usartConfig->Idle_ISR             );
-            ( void ) Usart_Set_RxTimeoutIsrCallback ( usartConfig->PeriphId, usartConfig->RxTimeout_ISR        );
-            ( void ) Usart_Set_ErrorIsrCallback     ( usartConfig->PeriphId, usartConfig->Error_ISR            );
+            retState = Usart_Set_DataConfig( usartConfig->PeriphId, usartConfig->DataConfig );
+        }
+        else
+        {
+            /* Error during initialization process or data handling is not used */
         }
     }
     else
@@ -421,26 +415,55 @@ usart_RequestState_t Usart_Init( usart_BusConfig_t * const usartConfig )
 /**
  * \brief Component de-initialization function
  *
- * \param usartConfig [in]: Pointer to configuration structure
- * \return State of request execution. Returns "OK" if request was success,
- *         otherwise return error.
+ * Stops the data handling and releases its resources (GPDMA channels, USART interrupt), disables
+ * the peripheral interrupt in NVIC and the peripheral, then resets the peripheral and disables
+ * its clock. All steps are executed, any failure is reported.
+ *
+ * \param usartId [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t.
+ *
+ * \return State of request execution. Returns \ref USART_REQUEST_OK if request was
+ *         success, otherwise returns \ref USART_REQUEST_ERROR.
  */
 usart_RequestState_t Usart_Deinit( usart_PeriphId_t usartId )
 {
     usart_RequestState_t returnState = USART_REQUEST_ERROR;
 
-    Rcc_Set_ResetActive( usart_PeriphConf[ usartId ].PeriphRcc );
-    Rcc_Set_ResetInactive( usart_PeriphConf[ usartId ].PeriphRcc );
+    if( USART_BUS_CNT > usartId )
+    {
+        /* -1- Data handling (transfers stopped, GPDMA channels and USART interrupt released) */
+        const usart_RequestState_t xferState = Usart_Set_XferDeinit( usartId );
 
-    Nvic_Set_PeriphIrq_Inactive( usart_PeriphConf[ usartId ].PeriphNvic );
+        /* -2- Interrupt in NVIC */
+        const nvic_RequestState_t nvicState = Nvic_Set_PeriphIrq_Inactive( usart_PeriphConf[ usartId ].PeriphNvic );
 
-    LL_USART_Disable( usart_PeriphConf[ usartId ].PeriphReg );
+        /* -3- Peripheral and its interrupts */
+        LL_USART_Disable( usart_PeriphConf[ usartId ].PeriphReg );
 
-    Usart_Set_InterruptsInactive( usartId );
+        const usart_RequestState_t irqState = Usart_Set_InterruptsInactive( usartId );
 
-    Rcc_Set_PeriphInactive( usart_PeriphConf[ usartId ].PeriphRcc );
+        /* -4- Peripheral reset and clock */
+        const rcc_RequestState_t rstActState   = Rcc_Set_ResetActive( usart_PeriphConf[ usartId ].PeriphRcc );
+        const rcc_RequestState_t rstInactState = Rcc_Set_ResetInactive( usart_PeriphConf[ usartId ].PeriphRcc );
+        const rcc_RequestState_t clkState      = Rcc_Set_PeriphInactive( usart_PeriphConf[ usartId ].PeriphRcc );
 
-    returnState = USART_REQUEST_OK;
+        if( ( USART_REQUEST_OK == xferState     ) &&
+            ( NVIC_REQUEST_OK  == nvicState     ) &&
+            ( USART_REQUEST_OK == irqState      ) &&
+            ( RCC_REQUEST_OK   == rstActState   ) &&
+            ( RCC_REQUEST_OK   == rstInactState ) &&
+            ( RCC_REQUEST_OK   == clkState      )    )
+        {
+            returnState = USART_REQUEST_OK;
+        }
+        else
+        {
+            returnState = USART_REQUEST_ERROR;
+        }
+    }
+    else
+    {
+        returnState = USART_REQUEST_ERROR;
+    }
 
     return ( returnState );
 }
@@ -450,12 +473,24 @@ usart_RequestState_t Usart_Deinit( usart_PeriphId_t usartId )
  * \brief Main task of module Usart
  *
  * This function shall be called in the main loop of the application or the task
- * scheduler. It shall be called periodically, depending on the module's 
- * requirements.
+ * scheduler. It moves data of running transfers in USART_XFER_MODE_POLL - it has to
+ * be called at least once per frame time of the fastest polled peripheral.
  */
 void Usart_Task( void )
 {
-
+    for( usart_PeriphId_t usartId = (usart_PeriphId_t)0u; USART_BUS_CNT > usartId; usartId ++ )
+    {
+        if( ( USART_FUNCTION_ACTIVE == usart_XferContext[ usartId ].InitState      ) &&
+            ( ( USART_XFER_MODE_POLL == usart_XferContext[ usartId ].Config.TxMode ) ||
+              ( USART_XFER_MODE_POLL == usart_XferContext[ usartId ].Config.RxMode )    )    )
+        {
+            (void)Usart_Poll_Task( usartId );
+        }
+        else
+        {
+            /* No polling data handling on the peripheral */
+        }
+    }
 }
 
 
@@ -473,7 +508,7 @@ usart_RequestState_t Usart_Get_DefaultConfig( usart_BusConfig_t* usartConfig )
     if( USART_NULL_PTR != usartConfig )
     {
         usartConfig->PeriphId             = USART_BUS_1;
-        usartConfig->BaudRate             = 115200u;
+        usartConfig->BaudRate             = USART_DEFAULT_BAUDRATE;
         usartConfig->DataWidth            = USART_DATA_WIDTH_8;
         usartConfig->StopBits             = USART_STOP_BITS_1;
         usartConfig->Parity               = USART_PARITY_NONE;
@@ -486,15 +521,7 @@ usart_RequestState_t Usart_Get_DefaultConfig( usart_BusConfig_t* usartConfig )
         usartConfig->RxTimeoutValue       = 0u;
         usartConfig->RxPinOperationLevels = USART_RX_PIN_STANDARD;
         usartConfig->TxPinOperationLevels = USART_TX_PIN_STANDARD;
-        usartConfig->OperationMode        = USART_TRANSFER_BLOCKING;
-        usartConfig->DmaConfiguration     = USART_NULL_PTR;
-        usartConfig->IrqPriority          = 10u;
-        usartConfig->RxNotEmpty_ISR       = USART_NULL_PTR;
-        usartConfig->TransmitEmpty_ISR    = USART_NULL_PTR;
-        usartConfig->TransferComplete_ISR = USART_NULL_PTR;
-        usartConfig->Error_ISR            = USART_NULL_PTR;
-        usartConfig->Idle_ISR             = USART_NULL_PTR;
-        usartConfig->RxTimeout_ISR        = USART_NULL_PTR;
+        usartConfig->DataConfig           = USART_NULL_PTR;
         usartConfig->BusRxPin             = USART_RX_PIN_UNUSED;
         usartConfig->BusTxPin             = USART_TX_PIN_UNUSED;
         usartConfig->BusDePin             = USART_DE_PIN_UNUSED;
@@ -782,21 +809,28 @@ usart_RequestState_t Usart_Get_Baudrate( usart_PeriphId_t usartId, usart_Baudrat
     uint32_t             usartPeriphClk = 0;
     usart_Prescaler_t    usartPrescaler = 0u;
 
-    usart_RequestState_t oversamplingState = Usart_Get_Oversampling( usartId, &oversampling );
-    rcc_RequestState_t   rccRequestState   = Rcc_Get_PeriphClk( usart_PeriphConf[ usartId ].PeriphRcc, &usartPeriphClk );
-    usart_RequestState_t prescState        = Usart_Get_Prescaler( usartPeriphClk, &usartPrescaler);
-
-    if( ( USART_NULL_PTR      != baudrate          ) &&
-        ( RCC_REQUEST_ERROR   != rccRequestState   ) &&
-        ( USART_REQUEST_ERROR != prescState        ) &&
-        ( USART_REQUEST_ERROR != oversamplingState )    )
+    if( ( USART_BUS_CNT   > usartId  ) &&
+        ( USART_NULL_PTR != baudrate )    )
     {
-        *baudrate = LL_USART_GetBaudRate( usart_PeriphConf[ usartId ].PeriphReg,
-                                          usartPeriphClk,
-                                          usartPrescaler,
-                                          oversampling );
+        const usart_RequestState_t oversamplingState = Usart_Get_Oversampling( usartId, &oversampling );
+        const rcc_RequestState_t   rccRequestState   = Rcc_Get_PeriphClk( usart_PeriphConf[ usartId ].PeriphRcc, &usartPeriphClk );
+        const usart_RequestState_t prescState        = Usart_Get_Prescaler( usartId, &usartPrescaler );
 
-        retValue = USART_REQUEST_OK;
+        if( ( RCC_REQUEST_ERROR   != rccRequestState   ) &&
+            ( USART_REQUEST_ERROR != prescState        ) &&
+            ( USART_REQUEST_ERROR != oversamplingState )    )
+        {
+            *baudrate = LL_USART_GetBaudRate( usart_PeriphConf[ usartId ].PeriphReg,
+                                              usartPeriphClk,
+                                              usartPrescaler,
+                                              oversampling );
+
+            retValue = USART_REQUEST_OK;
+        }
+        else
+        {
+            retValue = USART_REQUEST_ERROR;
+        }
     }
     else
     {
@@ -2007,24 +2041,434 @@ usart_RequestState_t Usart_Get_RxRegisterAddr( usart_PeriphId_t usartId, usart_R
 /**
  * \brief Writes data to transmission register
  *
- * \param usartId [in]: USART/UART bus identification.
+ * \note  Invalid usartId is ignored (nothing is written).
+ *
+ * \param usartId [in]: USART/UART bus identification, value from \ref usart_PeriphId_t.
  * \param txData  [in]: Data to be transmitted
  */
 void Usart_SendData( usart_PeriphId_t usartId, usart_TxData_t txData )
 {
-    usart_PeriphConf[ usartId ].PeriphReg->TDR = txData;
+    if( USART_BUS_CNT > usartId )
+    {
+        usart_PeriphConf[ usartId ].PeriphReg->TDR = txData;
+    }
+    else
+    {
+        /* Invalid peripheral identification */
+    }
 }
 
 
 /**
  * \brief Reads data from reception register
  *
- * \param usartId [in]: USART/UART bus identification.
- * \return Received data value
+ * \param usartId [in]: USART/UART bus identification, value from \ref usart_PeriphId_t.
+ * \return Received data value, 0 for invalid usartId
  */
 usart_RxData_t Usart_ReadData( usart_PeriphId_t usartId )
 {
-    return ( usart_PeriphConf[ usartId ].PeriphReg->RDR );
+    usart_RxData_t rxData = 0u;
+
+    if( USART_BUS_CNT > usartId )
+    {
+        rxData = (usart_RxData_t)usart_PeriphConf[ usartId ].PeriphReg->RDR;
+    }
+    else
+    {
+        /* Invalid peripheral identification */
+    }
+
+    return ( rxData );
+}
+
+
+/*------------------------------ Data handling -------------------------------*/
+
+/**
+ * \brief Configures data handling (transmission / reception mode, buffers, callbacks)
+ *
+ * The previous data handling is released (GPDMA channels, USART interrupt), the configuration
+ * is copied and the mode handlers of both directions are initialized. Transfers are started by
+ * Usart_Set_TxStart() / Usart_Set_RxStart().
+ *
+ * \pre   Transmission and reception must not be running (see Usart_Set_TxStop() /
+ *        Usart_Set_RxStop()). Otherwise \ref USART_REQUEST_ERROR is returned and nothing is
+ *        changed. RxEndMode USART_RX_END_TIMEOUT requires enabled receiver timeout
+ *        (usart_BusConfig_t RxTimeoutValue).
+ *
+ * \param usartId    [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ * \param dataConfig [in]: Pointer to data handling configuration \ref usart_DataConfig_t.
+ *                         Must not be NULL. The configuration is copied.
+ *
+ * \return State of request execution. Returns \ref USART_REQUEST_OK if request was
+ *         success, otherwise returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Set_DataConfig( usart_PeriphId_t usartId, const usart_DataConfig_t * const dataConfig )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( ( USART_BUS_CNT   > usartId    ) &&
+        ( USART_NULL_PTR != dataConfig )    )
+    {
+        const usart_RequestState_t configState = Usart_Check_DataConfig( usartId, dataConfig );
+
+        if( ( USART_FUNCTION_ACTIVE == usart_XferContext[ usartId ].TxState ) ||
+            ( USART_FUNCTION_ACTIVE == usart_XferContext[ usartId ].RxState )    )
+        {
+            /* Transfer is running, Usart_Set_TxStop() / Usart_Set_RxStop() is required first */
+            retState = USART_REQUEST_ERROR;
+        }
+        else if( USART_REQUEST_OK != configState )
+        {
+            /* New configuration is invalid */
+            retState = USART_REQUEST_ERROR;
+        }
+        else
+        {
+            retState = Usart_Set_XferDeinit( usartId );
+
+            if( USART_REQUEST_OK == retState )
+            {
+                retState = Usart_Set_XferInit( usartId, dataConfig );
+            }
+            else
+            {
+                /* Previous data handling resources could not be released */
+            }
+        }
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Returns the active data handling configuration
+ *
+ * \param usartId     [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ * \param dataConfig [out]: Pointer to store the data handling configuration. Must not be NULL.
+ *
+ * \return State of request execution. Returns \ref USART_REQUEST_OK if request was success,
+ *         otherwise (also if data handling is not initialized) returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Get_DataConfig( usart_PeriphId_t usartId, usart_DataConfig_t * const dataConfig )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( ( USART_BUS_CNT   > usartId    ) &&
+        ( USART_NULL_PTR != dataConfig )    )
+    {
+        if( USART_FUNCTION_ACTIVE == usart_XferContext[ usartId ].InitState )
+        {
+            *dataConfig = usart_XferContext[ usartId ].Config;
+            retState    = USART_REQUEST_OK;
+        }
+        else
+        {
+            /* Data handling is not initialized */
+            retState = USART_REQUEST_ERROR;
+        }
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Starts transmission of a data buffer in the configured transmission mode
+ *
+ * The end of the transmission (last stop bit sent) is reported by TxCompleteCallback and by
+ * Usart_Get_TxState() returning \ref USART_FUNCTION_INACTIVE.
+ *
+ * \pre   Data handling is initialized with TxMode other than USART_XFER_MODE_NONE and no
+ *        transmission is running. Otherwise \ref USART_REQUEST_ERROR is returned.
+ *
+ * \param usartId  [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ * \param txData   [in]: Data to be transmitted. Must not be NULL and must stay valid until the
+ *                       end of the transmission.
+ * \param txSize   [in]: Count of bytes to be transmitted (> 0)
+ *
+ * \return State of request execution. Returns \ref USART_REQUEST_OK if request was
+ *         success, otherwise returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Set_TxStart( usart_PeriphId_t usartId, const usart_TxData_t * const txData, usart_TxDataCnt_t txSize )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( ( USART_BUS_CNT   > usartId ) &&
+        ( USART_NULL_PTR != txData  ) &&
+        ( 0u              < txSize  )    )
+    {
+        if( ( USART_FUNCTION_ACTIVE   == usart_XferContext[ usartId ].InitState     ) &&
+            ( USART_FUNCTION_INACTIVE == usart_XferContext[ usartId ].TxState       ) &&
+            ( USART_XFER_MODE_NONE    != usart_XferContext[ usartId ].Config.TxMode )    )
+        {
+            usart_XferContext[ usartId ].TxData  = txData;
+            usart_XferContext[ usartId ].TxSize  = txSize;
+            usart_XferContext[ usartId ].TxIdx   = 0u;
+            usart_XferContext[ usartId ].TxState = USART_FUNCTION_ACTIVE;
+
+            retState = usart_TxModeLut[ usart_XferContext[ usartId ].Config.TxMode ].Start( usartId );
+
+            if( USART_REQUEST_OK != retState )
+            {
+                usart_XferContext[ usartId ].TxState = USART_FUNCTION_INACTIVE;
+            }
+            else
+            {
+                /* Transmission is running */
+            }
+        }
+        else
+        {
+            /* Data handling not initialized, transmission running or not used */
+            retState = USART_REQUEST_ERROR;
+        }
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Stops a running transmission (TxCompleteCallback is not called)
+ *
+ * \note  A byte already written to the data register is still sent by HW.
+ *
+ * \param usartId [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ *
+ * \return State of request execution. Returns \ref USART_REQUEST_OK if request was success
+ *         (also if no transmission is running), otherwise returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Set_TxStop( usart_PeriphId_t usartId )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( USART_BUS_CNT > usartId )
+    {
+        if( ( USART_FUNCTION_ACTIVE == usart_XferContext[ usartId ].InitState ) &&
+            ( USART_FUNCTION_ACTIVE == usart_XferContext[ usartId ].TxState   )    )
+        {
+            usart_XferContext[ usartId ].TxState = USART_FUNCTION_INACTIVE;
+
+            retState = usart_TxModeLut[ usart_XferContext[ usartId ].Config.TxMode ].Stop( usartId );
+        }
+        else
+        {
+            /* Transmission is not running */
+            retState = USART_REQUEST_OK;
+        }
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Returns state of the transmission
+ *
+ * \param usartId  [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ * \param txState [out]: Pointer to store the state - \ref USART_FUNCTION_ACTIVE from
+ *                       Usart_Set_TxStart() until the last stop bit is sent. Must not be NULL.
+ *
+ * \return State of request execution. Returns \ref USART_REQUEST_OK if request was
+ *         success, otherwise returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Get_TxState( usart_PeriphId_t usartId, usart_FunctionState_t * const txState )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( ( USART_BUS_CNT   > usartId ) &&
+        ( USART_NULL_PTR != txState )    )
+    {
+        *txState = usart_XferContext[ usartId ].TxState;
+        retState = USART_REQUEST_OK;
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Starts reception into RxBuffer in the configured reception mode
+ *
+ * Stale received data and reception flags are cleared, the next received byte is stored to
+ * RxBuffer[ 0 ].
+ *
+ * \pre   Data handling is initialized with RxMode other than USART_XFER_MODE_NONE and no
+ *        reception is running. Otherwise \ref USART_REQUEST_ERROR is returned.
+ *
+ * \param usartId [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ *
+ * \return State of request execution. Returns \ref USART_REQUEST_OK if request was
+ *         success, otherwise returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Set_RxStart( usart_PeriphId_t usartId )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( USART_BUS_CNT > usartId )
+    {
+        if( ( USART_FUNCTION_ACTIVE   == usart_XferContext[ usartId ].InitState     ) &&
+            ( USART_FUNCTION_INACTIVE == usart_XferContext[ usartId ].RxState       ) &&
+            ( USART_XFER_MODE_NONE    != usart_XferContext[ usartId ].Config.RxMode )    )
+        {
+            usart_XferContext[ usartId ].RxIdx   = 0u;
+            usart_XferContext[ usartId ].RxState = USART_FUNCTION_ACTIVE;
+
+            retState = usart_RxModeLut[ usart_XferContext[ usartId ].Config.RxMode ].Start( usartId );
+
+            if( USART_REQUEST_OK != retState )
+            {
+                usart_XferContext[ usartId ].RxState = USART_FUNCTION_INACTIVE;
+            }
+            else
+            {
+                /* Reception is running */
+            }
+        }
+        else
+        {
+            /* Data handling not initialized, reception running or not used */
+            retState = USART_REQUEST_ERROR;
+        }
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Stops a running reception (received data stay in RxBuffer, see Usart_Get_RxCount())
+ *
+ * \param usartId [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ *
+ * \return State of request execution. Returns \ref USART_REQUEST_OK if request was success
+ *         (also if no reception is running), otherwise returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Set_RxStop( usart_PeriphId_t usartId )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( USART_BUS_CNT > usartId )
+    {
+        if( ( USART_FUNCTION_ACTIVE == usart_XferContext[ usartId ].InitState ) &&
+            ( USART_FUNCTION_ACTIVE == usart_XferContext[ usartId ].RxState   )    )
+        {
+            usart_XferContext[ usartId ].RxState = USART_FUNCTION_INACTIVE;
+
+            retState = usart_RxModeLut[ usart_XferContext[ usartId ].Config.RxMode ].Stop( usartId );
+        }
+        else
+        {
+            /* Reception is not running */
+            retState = USART_REQUEST_OK;
+        }
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Returns state of the reception
+ *
+ * \param usartId  [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ * \param rxState [out]: Pointer to store the state - \ref USART_FUNCTION_ACTIVE from
+ *                       Usart_Set_RxStart() until stop (one shot buffer full / end of message,
+ *                       Usart_Set_RxStop()). Must not be NULL.
+ *
+ * \return State of request execution. Returns \ref USART_REQUEST_OK if request was
+ *         success, otherwise returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Get_RxState( usart_PeriphId_t usartId, usart_FunctionState_t * const rxState )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( ( USART_BUS_CNT   > usartId ) &&
+        ( USART_NULL_PTR != rxState )    )
+    {
+        *rxState = usart_XferContext[ usartId ].RxState;
+        retState = USART_REQUEST_OK;
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Returns count of bytes stored in RxBuffer since the reception start (one shot) or the
+ *        write position in RxBuffer (circular)
+ *
+ * \param usartId [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ * \param rxCnt  [out]: Pointer to store the count of received bytes. Must not be NULL.
+ *
+ * \return State of request execution. Returns \ref USART_REQUEST_OK if request was success,
+ *         otherwise (also if reception is not used) returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Get_RxCount( usart_PeriphId_t usartId, usart_RxDataCnt_t * const rxCnt )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( ( USART_BUS_CNT   > usartId ) &&
+        ( USART_NULL_PTR != rxCnt   )    )
+    {
+        if( ( USART_FUNCTION_ACTIVE == usart_XferContext[ usartId ].InitState     ) &&
+            ( USART_XFER_MODE_DMA   == usart_XferContext[ usartId ].Config.RxMode )    )
+        {
+            /* DMA moves the data - count is derived from the GPDMA remaining count */
+            retState = Usart_Dma_Get_RxCount( usartId, rxCnt );
+        }
+        else if( ( USART_FUNCTION_ACTIVE == usart_XferContext[ usartId ].InitState     ) &&
+                 ( USART_XFER_MODE_NONE  != usart_XferContext[ usartId ].Config.RxMode )    )
+        {
+            *rxCnt   = usart_XferContext[ usartId ].RxIdx;
+            retState = USART_REQUEST_OK;
+        }
+        else
+        {
+            /* Reception is not used */
+            retState = USART_REQUEST_ERROR;
+        }
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
 }
 
 
@@ -2446,404 +2890,6 @@ usart_RequestState_t Usart_Get_DmaRxReqState( usart_PeriphId_t usartId, usart_Fl
 
 
 /**
- * \brief De-activates USART/UART DMA transfer requests for data reception
- *
- * When DMA peripheral is used for data transfer, the DMA trigger has to be
- * activated, to trigger transfer of data from/to memory from/to peripheral.
- * For reception is this trigger activated by HW, when receive data register
- * is not empty.
- *
- * \param usartId [in]: USART/UART peripheral ID
- * \return State of request execution. Returns "OK" if request was success,
- *         otherwise return error.
- */
-usart_RequestState_t Usart_Init_Dma( usart_PeriphId_t usartId, usart_DmaConfig_t * const dmaConfig )
-{
-    usart_RequestState_t   retValue                = USART_REQUEST_ERROR;
-    gpdma_ConfigStruct_t   dmaPeriphConfig         = { 0u };
-    gpdma_TransferConfig_t dmaTransferConfig[ 2u ] = { 0u };
-    gpdma_RequestState_t   gpdmaRetValue           = GPDMA_REQUEST_ERROR;
-
-    usart_RuntimeData[ usartId ].TxTransferList;
-
-    if( USART_NULL_PTR != dmaConfig )
-    {
-        if( ( USART_DMA_CHANNEL_CNT > dmaConfig->TxDmaChannelId ) &&
-            ( USART_DMA_PERIPH_CNT  > dmaConfig->TxDmaPeriphId  )    )
-        {
-            dmaTransferConfig[ 0u ].Direction                   = GPDMA_DIR_MEMORY_TO_PERIPH;
-            dmaTransferConfig[ 0u ].EventMode                   = GPDMA_TRANSFER_EVENT_BLOCK;
-
-            dmaTransferConfig[ 0u ].TriggerType                 = GPDMA_TRG_NOT_USED;
-            dmaTransferConfig[ 0u ].TriggerSource               = 0u;
-            dmaTransferConfig[ 0u ].TriggerMode                 = GPDMA_TRIGGER_BLOCK;
-
-            dmaTransferConfig[ 0u ].RequestSource               = usart_PeriphConf[ usartId ].PeriphDmaTxReq;
-            dmaTransferConfig[ 0u ].RequestMode                 = GPDMA_PERIPH_REQ_SINGLE;
-
-            dmaTransferConfig[ 0u ].BlockSize                   = 0u; /* This value will be configured by user before transfer start */
-            dmaTransferConfig[ 0u ].BlockRepetitionCount        = 0u;
-
-            dmaTransferConfig[ 0u ].SourceAddr                  = 0u; /* This value will be configured by user before transfer start */
-            dmaTransferConfig[ 0u ].SourceDataSize              = GPDMA_DATA_SIZE_8BITS;
-            dmaTransferConfig[ 0u ].SourceBurstLength           = 1u;
-            dmaTransferConfig[ 0u ].SourceAddrMode              = GPDMA_ADDR_INCREMENT;
-            dmaTransferConfig[ 0u ].SourcePortId                = GPDMA_PORT_DEFAULT;
-            dmaTransferConfig[ 0u ].SourceDataOp                = GPDMA_SRC_DATA_PRESERVE;
-            dmaTransferConfig[ 0u ].SourceBlockOffset2D         = 0u;
-            dmaTransferConfig[ 0u ].SourceRepBlockOffset2D      = 0u;
-
-            dmaTransferConfig[ 0u ].DestinationAddr             = (gpdma_DstAddr_t)&usart_PeriphConf[ usartId ].PeriphReg->TDR;
-            dmaTransferConfig[ 0u ].DestinationDataSize         = GPDMA_DATA_SIZE_8BITS;
-            dmaTransferConfig[ 0u ].DestinationBurstLength      = 1u;
-            dmaTransferConfig[ 0u ].DestinationAddrMode         = GPDMA_ADDR_STATIC;
-            dmaTransferConfig[ 0u ].DestinationPortId           = GPDMA_PORT_DEFAULT;
-            dmaTransferConfig[ 0u ].DestinationDataOp           = GPDMA_DEST_DATA_PRESERVE;
-            dmaTransferConfig[ 0u ].DestinationBlockOffset2D    = 0u;
-            dmaTransferConfig[ 0u ].DestinationRepBlockOffset2D = 0u;
-
-            usart_RuntimeData[ usartId ].DmaTxPeriphId  = dmaConfig->TxDmaPeriphId;
-            usart_RuntimeData[ usartId ].DmaTxChannelId = dmaConfig->TxDmaChannelId;
-
-            /* DMA configuration for transmit channel */
-            Gpdma_Get_DefaultConfig( &dmaPeriphConfig );
-
-            dmaPeriphConfig.PeriphId             = (gpdma_PeriphId_t)dmaConfig->TxDmaPeriphId;
-            dmaPeriphConfig.ChannelId            = (gpdma_ChannelId_t)dmaConfig->TxDmaChannelId;
-            dmaPeriphConfig.ChannelPrio          = (gpdma_Priority_t)dmaConfig->TxDmaPriority;
-
-            dmaPeriphConfig.TransferExecMode     = GPDMA_XFER_EXEC_CONTINUOUS;
-            dmaPeriphConfig.TransferConfig       = dmaTransferConfig;
-            dmaPeriphConfig.TransfersCount       = 1u;
-            dmaPeriphConfig.XferListAccessMode   = GPDMA_TRANSFER_LIST_ACCESS_APPEND;
-            dmaPeriphConfig.XferList             = &usart_RuntimeData[ usartId ].TxTransferList;
-            dmaPeriphConfig.TransferLockState    = GPDMA_TRANSFER_LIST_UNLOCKED;
-
-            dmaPeriphConfig.TransferCompleteIsr  = (gpdma_IsrCallback*)dmaConfig->TxTransferCompleteCallback;
-            dmaPeriphConfig.HalfTransferIsr      = (gpdma_IsrCallback*)dmaConfig->TxHalfTransferCallback;
-            dmaPeriphConfig.ErrorIsr             = (gpdma_IsrErrCallback*)dmaConfig->TxErrorCallback;
-
-            gpdmaRetValue = Gpdma_Init( &dmaPeriphConfig );
-
-            if( GPDMA_REQUEST_ERROR != gpdmaRetValue )
-            {
-                retValue = USART_REQUEST_OK;
-            }
-            else
-            {
-                retValue = USART_REQUEST_ERROR;
-            }
-        }
-        else
-        {
-            /* DMA for transmit is not required */
-        }
-
-
-        if( ( USART_DMA_CHANNEL_CNT > dmaConfig->RxDmaChannelId ) &&
-            ( USART_DMA_PERIPH_CNT  > dmaConfig->RxDmaPeriphId  )    )
-        {
-            dmaTransferConfig[ 1u ].Direction                   = GPDMA_DIR_PERIPH_TO_MEMORY;
-            dmaTransferConfig[ 1u ].EventMode                   = GPDMA_TRANSFER_EVENT_BLOCK;
-
-            dmaTransferConfig[ 1u ].TriggerType                 = GPDMA_TRG_NOT_USED;
-            dmaTransferConfig[ 1u ].TriggerSource               = 0u;
-            dmaTransferConfig[ 1u ].TriggerMode                 = GPDMA_TRIGGER_BLOCK;
-
-            dmaTransferConfig[ 1u ].RequestSource               = usart_PeriphConf[ usartId ].PeriphDmaRxReq;
-            dmaTransferConfig[ 1u ].RequestMode                 = GPDMA_PERIPH_REQ_SINGLE;
-
-            dmaTransferConfig[ 1u ].BlockSize                   = 0u; /* This value will be configured by user before transfer start */
-            dmaTransferConfig[ 1u ].BlockRepetitionCount        = 0u;
-
-            dmaTransferConfig[ 1u ].SourceAddr                  = 0u; /* This value will be configured by user before transfer start */
-            dmaTransferConfig[ 1u ].SourceDataSize              = GPDMA_DATA_SIZE_8BITS;
-            dmaTransferConfig[ 1u ].SourceBurstLength           = 1u;
-            dmaTransferConfig[ 1u ].SourceAddrMode              = GPDMA_ADDR_STATIC;
-            dmaTransferConfig[ 1u ].SourcePortId                = GPDMA_PORT_DEFAULT;
-            dmaTransferConfig[ 1u ].SourceDataOp                = GPDMA_SRC_DATA_PRESERVE;
-            dmaTransferConfig[ 1u ].SourceBlockOffset2D         = 0u;
-            dmaTransferConfig[ 1u ].SourceRepBlockOffset2D      = 0u;
-
-            dmaTransferConfig[ 1u ].DestinationAddr             = (gpdma_DstAddr_t)&usart_PeriphConf[ usartId ].PeriphReg->RDR;
-            dmaTransferConfig[ 1u ].DestinationDataSize         = GPDMA_DATA_SIZE_8BITS;
-            dmaTransferConfig[ 1u ].DestinationBurstLength      = 1u;
-            dmaTransferConfig[ 1u ].DestinationAddrMode         = GPDMA_ADDR_INCREMENT;
-            dmaTransferConfig[ 1u ].DestinationPortId           = GPDMA_PORT_DEFAULT;
-            dmaTransferConfig[ 1u ].DestinationDataOp           = GPDMA_DEST_DATA_PRESERVE;
-            dmaTransferConfig[ 1u ].DestinationBlockOffset2D    = 0u;
-            dmaTransferConfig[ 1u ].DestinationRepBlockOffset2D = 0u;
-
-            usart_RuntimeData[ usartId ].DmaRxPeriphId  = dmaConfig->RxDmaPeriphId;
-            usart_RuntimeData[ usartId ].DmaRxChannelId = dmaConfig->RxDmaChannelId;
-
-
-            /* DMA configuration for transmit channel */
-            Gpdma_Get_DefaultConfig( &dmaPeriphConfig );
-
-            dmaPeriphConfig.PeriphId             = (gpdma_PeriphId_t)dmaConfig->TxDmaPeriphId;
-            dmaPeriphConfig.ChannelId            = (gpdma_ChannelId_t)dmaConfig->TxDmaChannelId;
-            dmaPeriphConfig.ChannelPrio          = (gpdma_Priority_t)dmaConfig->TxDmaPriority;
-
-            dmaPeriphConfig.TransferExecMode     = GPDMA_XFER_EXEC_CONTINUOUS;
-            dmaPeriphConfig.TransferConfig       = dmaTransferConfig;
-            dmaPeriphConfig.TransfersCount       = 1u;
-            dmaPeriphConfig.XferListAccessMode   = GPDMA_TRANSFER_LIST_ACCESS_APPEND;
-            dmaPeriphConfig.XferList             = &usart_RuntimeData[ usartId ].TxTransferList;
-            dmaPeriphConfig.TransferLockState    = GPDMA_TRANSFER_LIST_UNLOCKED;
-
-            dmaPeriphConfig.TransferCompleteIsr  = (gpdma_IsrCallback*)dmaConfig->TxTransferCompleteCallback;
-            dmaPeriphConfig.HalfTransferIsr      = (gpdma_IsrCallback*)dmaConfig->TxHalfTransferCallback;
-            dmaPeriphConfig.ErrorIsr             = (gpdma_IsrErrCallback*)dmaConfig->TxErrorCallback;
-
-            gpdmaRetValue = Gpdma_Init( &dmaPeriphConfig );
-
-            if( GPDMA_REQUEST_ERROR != gpdmaRetValue )
-            {
-                retValue = USART_REQUEST_OK;
-            }
-            else
-            {
-                retValue = USART_REQUEST_ERROR;
-            }
-        }
-        else
-        {
-            /* DMA for receive is not required */
-        }
-    }
-    else
-    {
-        retValue = USART_REQUEST_ERROR;
-    }
-
-    return ( retValue );
-}
-
-
-usart_RequestState_t Usart_Set_DmaTxStart( usart_PeriphId_t usartId, usart_TxDataCnt_t bytesCnt, usart_TxData_t * const dataBuff )
-{
-    usart_RequestState_t retValue    = USART_REQUEST_ERROR;
-    gpdma_RequestState_t dmaRetValue = GPDMA_REQUEST_ERROR;
-
-    if( USART_BUS_CNT > usartId )
-    {
-        dmaRetValue = Gpdma_Set_BlockSize( (gpdma_PeriphId_t)usart_RuntimeData[ usartId ].DmaTxPeriphId,
-                                           (gpdma_ChannelId_t)usart_RuntimeData[ usartId ].DmaTxChannelId,
-                                           (gpdma_BlockSize_t)bytesCnt );
-
-        if( GPDMA_REQUEST_ERROR != dmaRetValue )
-        {
-
-            dmaRetValue = Gpdma_Set_SourceAddr( (gpdma_PeriphId_t)usart_RuntimeData[ usartId ].DmaTxPeriphId,
-                                                (gpdma_ChannelId_t)usart_RuntimeData[ usartId ].DmaTxChannelId,
-                                                (gpdma_SrcAddr_t)dataBuff );
-
-            if( GPDMA_REQUEST_ERROR != dmaRetValue )
-            {
-
-                dmaRetValue = Gpdma_Set_ChannelActive( (gpdma_PeriphId_t)usart_RuntimeData[ usartId ].DmaTxPeriphId,
-                                                       (gpdma_ChannelId_t)usart_RuntimeData[ usartId ].DmaTxChannelId );
-
-                if( GPDMA_REQUEST_ERROR != dmaRetValue )
-                {
-                    retValue = Usart_Set_DmaTxRequestActive( usartId );
-                }
-                else
-                {
-                    /* Activation of DMA channel was unsuccessful */
-                    retValue = USART_REQUEST_ERROR;
-                }
-            }
-            else
-            {
-                /* Configuration of memory address was unsuccessful */
-                retValue = USART_REQUEST_ERROR;
-            }
-        }
-        else
-        {
-            /* Configuration of data bytes was unsuccessful */
-            retValue = USART_REQUEST_ERROR;
-        }
-    }
-    else
-    {
-        retValue = USART_REQUEST_ERROR;
-    }
-
-    return ( retValue );
-}
-
-
-usart_RequestState_t Usart_Set_DmaTxStop( usart_PeriphId_t usartId )
-{
-    usart_RequestState_t retValue = USART_REQUEST_ERROR;
-
-    if( USART_BUS_CNT > usartId )
-    {
-        gpdma_RequestState_t dmaRetValue = Gpdma_Set_ChannelInactive( (gpdma_PeriphId_t)usart_RuntimeData[ usartId ].DmaTxPeriphId,
-                                                                      (gpdma_ChannelId_t)usart_RuntimeData[ usartId ].DmaTxChannelId );
-
-        if( GPDMA_REQUEST_ERROR == dmaRetValue )
-        {
-            retValue = USART_REQUEST_ERROR;
-        }
-        else
-        {
-            retValue = Usart_Set_DmaTxRequestInactive( usartId );
-        }
-    }
-    else
-    {
-        retValue = USART_REQUEST_ERROR;
-    }
-
-    return ( retValue );
-}
-
-
-usart_RequestState_t Usart_Get_DmaTxRemainingCnt( usart_PeriphId_t usartId, usart_TxDataCnt_t * const bytesCnt )
-{
-    usart_RequestState_t retValue = USART_REQUEST_ERROR;
-
-    if( ( USART_BUS_CNT   > usartId  ) &&
-        ( USART_NULL_PTR != bytesCnt )    )
-    {
-        gpdma_RequestState_t dmaRetValue = Gpdma_Get_BlockSize( (gpdma_PeriphId_t)usart_RuntimeData[ usartId ].DmaTxPeriphId,
-                                                                (gpdma_ChannelId_t)usart_RuntimeData[ usartId ].DmaTxChannelId,
-                                                                (gpdma_BlockSize_t*)bytesCnt );
-        if( GPDMA_REQUEST_ERROR == dmaRetValue )
-        {
-            retValue = USART_REQUEST_ERROR;
-        }
-        else
-        {
-            retValue = USART_REQUEST_OK;
-        }
-    }
-    else
-    {
-        retValue = USART_REQUEST_ERROR;
-    }
-
-    return ( retValue );
-}
-
-
-
-usart_RequestState_t Usart_Set_DmaRxStart( usart_PeriphId_t usartId, usart_TxDataCnt_t bytesCnt, usart_TxData_t * const dataBuff )
-{
-    usart_RequestState_t retValue    = USART_REQUEST_ERROR;
-    gpdma_RequestState_t dmaRetValue = GPDMA_REQUEST_ERROR;
-
-    if( USART_BUS_CNT > usartId )
-    {
-        dmaRetValue = Gpdma_Set_BlockSize( (gpdma_PeriphId_t)usart_RuntimeData[ usartId ].DmaRxPeriphId,
-                                           (gpdma_ChannelId_t)usart_RuntimeData[ usartId ].DmaRxChannelId,
-                                           (gpdma_BlockSize_t)bytesCnt );
-
-        if( GPDMA_REQUEST_ERROR != dmaRetValue )
-        {
-
-            dmaRetValue = Gpdma_Set_DestinationAddr( (gpdma_PeriphId_t)usart_RuntimeData[ usartId ].DmaRxPeriphId,
-                                                     (gpdma_ChannelId_t)usart_RuntimeData[ usartId ].DmaRxChannelId,
-                                                     (gpdma_DstAddr_t)dataBuff );
-
-            if( GPDMA_REQUEST_ERROR != dmaRetValue )
-            {
-
-                dmaRetValue = Gpdma_Set_ChannelActive( (gpdma_PeriphId_t)usart_RuntimeData[ usartId ].DmaRxPeriphId,
-                                                       (gpdma_ChannelId_t)usart_RuntimeData[ usartId ].DmaRxChannelId );
-
-                if( GPDMA_REQUEST_ERROR != dmaRetValue )
-                {
-                    retValue = Usart_Set_DmaRxRequestActive( usartId );
-                }
-                else
-                {
-                    /* Activation of DMA channel was unsuccessful */
-                    retValue = USART_REQUEST_ERROR;
-                }
-            }
-            else
-            {
-                /* Configuration of memory address was unsuccessful */
-                retValue = USART_REQUEST_ERROR;
-            }
-        }
-        else
-        {
-            /* Configuration of data bytes was unsuccessful */
-            retValue = USART_REQUEST_ERROR;
-        }
-    }
-    else
-    {
-        retValue = USART_REQUEST_ERROR;
-    }
-
-    return ( retValue );
-}
-
-
-usart_RequestState_t Usart_Set_DmaRxStop( usart_PeriphId_t usartId )
-{
-    usart_RequestState_t retValue = USART_REQUEST_ERROR;
-
-    if( USART_BUS_CNT > usartId )
-    {
-        gpdma_RequestState_t dmaRetValue = Gpdma_Set_ChannelInactive( (gpdma_PeriphId_t)usart_RuntimeData[ usartId ].DmaRxPeriphId,
-                                                                      (gpdma_ChannelId_t)usart_RuntimeData[ usartId ].DmaRxChannelId );
-
-        if( GPDMA_REQUEST_ERROR == dmaRetValue )
-        {
-            retValue = USART_REQUEST_ERROR;
-        }
-        else
-        {
-            retValue = Usart_Set_DmaRxRequestInactive( usartId );
-        }
-    }
-    else
-    {
-        retValue = USART_REQUEST_ERROR;
-    }
-
-    return ( retValue );
-}
-
-
-
-usart_RequestState_t Usart_Get_DmaRxRemainingCnt( usart_PeriphId_t usartId, usart_RxDataCnt_t * const bytesCnt )
-{
-    usart_RequestState_t retValue = USART_REQUEST_ERROR;
-
-    if( ( USART_BUS_CNT   > usartId  ) &&
-        ( USART_NULL_PTR != bytesCnt )    )
-    {
-        gpdma_RequestState_t dmaRetValue = Gpdma_Get_BlockSize( (gpdma_PeriphId_t)usart_RuntimeData[ usartId ].DmaRxPeriphId,
-                                                                (gpdma_ChannelId_t)usart_RuntimeData[ usartId ].DmaRxChannelId,
-                                                                (gpdma_BlockSize_t*)bytesCnt );
-        if( GPDMA_REQUEST_ERROR == dmaRetValue )
-        {
-            retValue = USART_REQUEST_ERROR;
-        }
-        else
-        {
-            retValue = USART_REQUEST_OK;
-        }
-    }
-    else
-    {
-        retValue = USART_REQUEST_ERROR;
-    }
-
-    return ( retValue );
-}
-
-
-/**
  * \brief Activates Receive register Not Empty (RXNE) interrupt request.
  *
  * \param usartId [in]: USART/UART peripheral ID
@@ -2970,34 +3016,6 @@ usart_RequestState_t Usart_Get_RxNotEmptyIrqState( usart_PeriphId_t usartId, usa
 
 
 /**
- * \brief Configures Receive register Not Empty (RXNE) interrupt callback
- *
- * \param usartId  [in]: USART/UART peripheral ID
- * \param callback [in]: Pointer to interrupt callback
- * \return State of request execution. Returns "OK" if request was success,
- *         otherwise return error.
- */
-usart_RequestState_t Usart_Set_RxNotEmptyIsrCallback( usart_PeriphId_t usartId, usart_RxNeIrqCallback_t * const callback)
-{
-    usart_RequestState_t retValue = USART_REQUEST_ERROR;
-
-    if( USART_BUS_CNT > usartId )
-    {
-        usart_RuntimeData[ usartId ].RxNotEmptyIsr = callback;
-
-        retValue = USART_REQUEST_OK;
-    }
-    else
-    {
-        retValue = USART_REQUEST_ERROR;
-    }
-
-    return ( retValue );
-}
-
-
-
-/**
  * \brief Activates Transmit register Empty (TXE) interrupt request.
  *
  * \param usartId [in]: USART/UART peripheral ID
@@ -3120,34 +3138,6 @@ usart_RequestState_t Usart_Get_TxEmptyIrqState( usart_PeriphId_t usartId, usart_
 
 
 /**
- * \brief Configures Transmit Register Empty (TXE) interrupt callback
- *
- * \param usartId  [in]: USART/UART peripheral ID
- * \param callback [in]: Pointer to interrupt callback
- * \return State of request execution. Returns "OK" if request was success,
- *         otherwise return error.
- */
-usart_RequestState_t Usart_Set_TxEmptyIsrCallback( usart_PeriphId_t usartId, usart_TxeIrqCallback_t * const callback )
-{
-    usart_RequestState_t retValue = USART_REQUEST_ERROR;
-
-    if( USART_BUS_CNT > usartId )
-    {
-        usart_RuntimeData[ usartId ].TxEmptyIsr = callback;
-
-        retValue = USART_REQUEST_OK;
-    }
-    else
-    {
-        retValue = USART_REQUEST_ERROR;
-    }
-
-    return ( retValue );
-}
-
-
-
-/**
  * \brief Activates Transmission Complete (TC) interrupt request.
  *
  * \param usartId [in]: USART/UART peripheral ID
@@ -3260,33 +3250,6 @@ usart_RequestState_t Usart_Get_TxCompleteIrqState( usart_PeriphId_t usartId, usa
         {
             *reqState = USART_FLAG_INACTIVE;
         }
-
-        retValue = USART_REQUEST_OK;
-    }
-    else
-    {
-        retValue = USART_REQUEST_ERROR;
-    }
-
-    return ( retValue );
-}
-
-
-/**
- * \brief Configures Transmit Complete (TC) interrupt callback
- *
- * \param usartId  [in]: USART/UART peripheral ID
- * \param callback [in]: Pointer to interrupt callback
- * \return State of request execution. Returns "OK" if request was success,
- *         otherwise return error.
- */
-usart_RequestState_t Usart_Set_TxCompleteIsrCallback( usart_PeriphId_t usartId, usart_TcIrqCallback_t * const callback)
-{
-    usart_RequestState_t retValue = USART_REQUEST_ERROR;
-
-    if( USART_BUS_CNT > usartId )
-    {
-        usart_RuntimeData[ usartId ].TransferCompleteIsr = callback;
 
         retValue = USART_REQUEST_OK;
     }
@@ -3425,33 +3388,6 @@ usart_RequestState_t Usart_Get_IdleIrqState( usart_PeriphId_t usartId, usart_Fla
 
 
 /**
- * \brief Configures Idle detection (IDLE) interrupt callback
- *
- * \param usartId  [in]: USART/UART peripheral ID
- * \param callback [in]: Pointer to interrupt callback
- * \return State of request execution. Returns "OK" if request was success,
- *         otherwise return error.
- */
-usart_RequestState_t Usart_Set_IdleIsrCallback( usart_PeriphId_t usartId, usart_IdleIrqCallback_t * const callback)
-{
-    usart_RequestState_t retValue = USART_REQUEST_ERROR;
-
-    if( USART_BUS_CNT > usartId )
-    {
-        usart_RuntimeData[ usartId ].IdleIsr = callback;
-
-        retValue = USART_REQUEST_OK;
-    }
-    else
-    {
-        retValue = USART_REQUEST_ERROR;
-    }
-
-    return ( retValue );
-}
-
-
-/**
  * \brief Activates Receive Timeout (RTO) interrupt request.
  *
  * \param usartId [in]: USART/UART peripheral ID
@@ -3553,33 +3489,6 @@ usart_RequestState_t Usart_Get_RxTimeoutIrqState( usart_PeriphId_t usartId, usar
         {
             *reqState = USART_FLAG_INACTIVE;
         }
-
-        retValue = USART_REQUEST_OK;
-    }
-    else
-    {
-        retValue = USART_REQUEST_ERROR;
-    }
-
-    return ( retValue );
-}
-
-
-/**
- * \brief Configures Receive Timeout (RTO) interrupt callback
- *
- * \param usartId  [in]: USART/UART peripheral ID
- * \param callback [in]: Pointer to interrupt callback
- * \return State of request execution. Returns "OK" if request was success,
- *         otherwise return error.
- */
-usart_RequestState_t Usart_Set_RxTimeoutIsrCallback( usart_PeriphId_t usartId, usart_RxTimeoutIrqCallback_t * const callback)
-{
-    usart_RequestState_t retValue = USART_REQUEST_ERROR;
-
-    if( USART_BUS_CNT > usartId )
-    {
-        usart_RuntimeData[ usartId ].RxTimeoutIsr = callback;
 
         retValue = USART_REQUEST_OK;
     }
@@ -3740,33 +3649,6 @@ usart_RequestState_t Usart_Get_ErrorIrqState( usart_PeriphId_t usartId, usart_Fl
 
 
 /**
- * \brief Configures error interrupt callback
- *
- * \param usartId  [in]: USART/UART peripheral ID
- * \param callback [in]: Pointer to interrupt callback
- * \return State of request execution. Returns "OK" if request was success,
- *         otherwise return error.
- */
-usart_RequestState_t Usart_Set_ErrorIsrCallback( usart_PeriphId_t usartId, usart_ErrIrqCallback_t * const callback)
-{
-    usart_RequestState_t retValue = USART_REQUEST_ERROR;
-
-    if( USART_BUS_CNT > usartId )
-    {
-        usart_RuntimeData[ usartId ].ErrorIsr = callback;
-
-        retValue = USART_REQUEST_OK;
-    }
-    else
-    {
-        retValue = USART_REQUEST_ERROR;
-    }
-
-    return ( retValue );
-}
-
-
-/**
  * \brief Initializes GPIO RX pin used by peripheral
  *
  * \param pinId [in]: Pin identification
@@ -3777,7 +3659,7 @@ usart_RequestState_t Usart_InitRxGpio( usart_RxPin_t pinId )
 {
     usart_RequestState_t retValue      = USART_REQUEST_ERROR;
     gpio_RequestState_t  gpioInitState = GPIO_REQUEST_ERROR;
-    gpio_Config_t        pinConfig;
+    gpio_Config_t        pinConfig     = { 0u };
 
     pinConfig.PortId         = USART_BIT_MASK_DECODE_PORT( pinId );
     pinConfig.PinId          = USART_BIT_MASK_DECODE_PIN( pinId );
@@ -3814,7 +3696,7 @@ usart_RequestState_t Usart_InitTxGpio( usart_TxPin_t pinId )
 {
     usart_RequestState_t retValue      = USART_REQUEST_ERROR;
     gpio_RequestState_t  gpioInitState = GPIO_REQUEST_ERROR;
-    gpio_Config_t        pinConfig;
+    gpio_Config_t        pinConfig     = { 0u };
 
     pinConfig.PortId         = USART_BIT_MASK_DECODE_PORT( pinId );
     pinConfig.PinId          = USART_BIT_MASK_DECODE_PIN( pinId );
@@ -3851,7 +3733,7 @@ usart_RequestState_t Usart_InitDeGpio( usart_DePin_t pinId )
 {
     usart_RequestState_t retValue      = USART_REQUEST_ERROR;
     gpio_RequestState_t  gpioInitState = GPIO_REQUEST_ERROR;
-    gpio_Config_t        pinConfig;
+    gpio_Config_t        pinConfig     = { 0u };
 
     pinConfig.PortId         = USART_BIT_MASK_DECODE_PORT( pinId );
     pinConfig.PinId          = USART_BIT_MASK_DECODE_PIN( pinId );
@@ -3954,10 +3836,12 @@ static usart_RequestState_t Usart_Get_Prescaler( usart_PeriphId_t usartId, usart
 /**
  * \brief Calculate expected prescaler value for USART/UART peripheral
  *
+ * \param usartId      [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t.
  * \param periphClock  [in]: Peripheral clock in Hz
  * \param oversampling [in]: Peripheral over-sampling configuration
  * \param baudrate     [in]: Required peripheral baud-rate
  * \param prescaler   [out]: Calculated prescaler value
+ *
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
@@ -3979,7 +3863,9 @@ static usart_RequestState_t Usart_Get_ExpectedPrescaler( usart_PeriphId_t usartI
     uint32_t             baudrateDiffLower  = 0u;
     uint32_t             baudrateDiffHigher = 0u;
 
-    if( USART_NULL_PTR != prescaler )
+    if( ( USART_BUS_CNT   > usartId   ) &&
+        ( 0u              < baudrate  ) &&
+        ( USART_NULL_PTR != prescaler )    )
     {
         rcc_RequestState_t rccRequestState = Rcc_Get_PeriphClk( usart_PeriphConf[ usartId ].PeriphRcc, &usartPeriphClk );
 
@@ -3987,11 +3873,11 @@ static usart_RequestState_t Usart_Get_ExpectedPrescaler( usart_PeriphId_t usartI
         {
             if( USART_OVERSAMPLING_8 == oversampling )
             {
-                prescValue = periphClock / ( baudrate * 8u );
+                prescValue = periphClock / ( baudrate * USART_OVERSAMPLING_8_FACTOR );
             }
             else
             {
-                prescValue = periphClock / ( baudrate * 16u );
+                prescValue = periphClock / ( baudrate * USART_OVERSAMPLING_16_FACTOR );
             }
 
             /* Find nearest possible value for prescaler */
@@ -4076,196 +3962,841 @@ static usart_RequestState_t Usart_Get_ExpectedPrescaler( usart_PeriphId_t usartI
     return ( retState );
 }
 
+/*------------------------------ Data handling -------------------------------*/
+
+/**
+ * \brief Validates a data handling configuration
+ *
+ * - TxMode / RxMode must be valid.
+ * - Reception used: RxBuffer, RxBufferSize > 0, valid RxBufferMode and RxEndMode, receiver
+ *   timeout enabled for USART_RX_END_TIMEOUT.
+ * - Mode specific rules are checked by the mode handlers (DMA: identifications, priority,
+ *   different channels).
+ *
+ * \param usartId    [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ * \param dataConfig [in]: Pointer to data handling configuration \ref usart_DataConfig_t
+ *
+ * \return Returns \ref USART_REQUEST_OK if the configuration is valid. Otherwise returns
+ *         \ref USART_REQUEST_ERROR.
+ */
+static usart_RequestState_t Usart_Check_DataConfig( usart_PeriphId_t usartId, const usart_DataConfig_t * const dataConfig )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( ( USART_BUS_CNT        > usartId            ) &&
+        ( USART_NULL_PTR      != dataConfig         ) &&
+        ( USART_XFER_MODE_CNT  > dataConfig->TxMode ) &&
+        ( USART_XFER_MODE_CNT  > dataConfig->RxMode )    )
+    {
+        if( USART_XFER_MODE_NONE != dataConfig->RxMode )
+        {
+            usart_FlagState_t          rtoState = USART_FLAG_INACTIVE;
+            const usart_RequestState_t rtoRead  = Usart_Get_RxTimeoutState( usartId, &rtoState );
+
+            if( ( USART_NULL_PTR        != dataConfig->RxBuffer     ) &&
+                ( 0u                     < dataConfig->RxBufferSize ) &&
+                ( USART_BUFFER_MODE_CNT  > dataConfig->RxBufferMode ) &&
+                ( USART_RX_END_CNT       > dataConfig->RxEndMode    ) &&
+                ( USART_REQUEST_OK      == rtoRead                  )    )
+            {
+                retState = USART_REQUEST_OK;
+            }
+            else
+            {
+                /* Reception configuration is invalid */
+                retState = USART_REQUEST_ERROR;
+            }
+
+            if( ( USART_REQUEST_OK     == retState              ) &&
+                ( USART_RX_END_TIMEOUT == dataConfig->RxEndMode ) &&
+                ( USART_FLAG_ACTIVE    != rtoState              )    )
+            {
+                /* End of message by receiver timeout requires enabled receiver timeout */
+                retState = USART_REQUEST_ERROR;
+            }
+            else
+            {
+                /* End of message detection is available */
+            }
+        }
+        else
+        {
+            /* Reception is not used */
+            retState = USART_REQUEST_OK;
+        }
+
+        if( USART_REQUEST_OK == retState )
+        {
+            retState = usart_TxModeLut[ dataConfig->TxMode ].CheckConfig( usartId, dataConfig );
+        }
+        else
+        {
+            /* Common part of the configuration is invalid */
+        }
+
+        if( USART_REQUEST_OK == retState )
+        {
+            retState = usart_RxModeLut[ dataConfig->RxMode ].CheckConfig( usartId, dataConfig );
+        }
+        else
+        {
+            /* Transmission configuration is invalid */
+        }
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Stores the data handling configuration and initializes the mode handlers of both
+ *        directions and the USART interrupt (if used)
+ *
+ * \note  Initialization state is set before the handlers are initialized, so partially
+ *        initialized handlers are released by Usart_Set_XferDeinit().
+ *
+ * \pre   Configuration was validated, the previous data handling is released.
+ *
+ * \param usartId    [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ * \param dataConfig [in]: Pointer to data handling configuration \ref usart_DataConfig_t
+ *
+ * \return Function processing state. Returns \ref USART_REQUEST_OK if request
+ *         was processed without problems. Otherwise returns \ref USART_REQUEST_ERROR.
+ */
+static usart_RequestState_t Usart_Set_XferInit( usart_PeriphId_t usartId, const usart_DataConfig_t * const dataConfig )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( ( USART_BUS_CNT   > usartId    ) &&
+        ( USART_NULL_PTR != dataConfig )    )
+    {
+        /* Configuration is copied - user structure may be a temporary (stack) variable */
+        usart_XferContext[ usartId ].Config    = *dataConfig;
+        usart_XferContext[ usartId ].TxData    = USART_NULL_PTR;
+        usart_XferContext[ usartId ].TxSize    = 0u;
+        usart_XferContext[ usartId ].TxIdx     = 0u;
+        usart_XferContext[ usartId ].TxState   = USART_FUNCTION_INACTIVE;
+        usart_XferContext[ usartId ].RxIdx     = 0u;
+        usart_XferContext[ usartId ].RxState   = USART_FUNCTION_INACTIVE;
+        usart_XferContext[ usartId ].InitState = USART_FUNCTION_ACTIVE;
+
+        retState = usart_TxModeLut[ usart_XferContext[ usartId ].Config.TxMode ].Init( usartId );
+
+        if( USART_REQUEST_OK == retState )
+        {
+            retState = usart_RxModeLut[ usart_XferContext[ usartId ].Config.RxMode ].Init( usartId );
+        }
+        else
+        {
+            /* Transmission handler initialization failed */
+        }
+
+        const usart_FunctionState_t irqUsed = Usart_Get_IrqUsed( &usart_XferContext[ usartId ].Config );
+
+        if( ( USART_REQUEST_OK == retState ) && ( USART_FUNCTION_ACTIVE == irqUsed ) )
+        {
+            retState = Usart_Isr_Init( usartId );
+        }
+        else
+        {
+            /* Initialization failed or USART interrupt is not used */
+        }
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Stops running transfers and releases resources of the mode handlers and the USART
+ *        interrupt (all steps are executed, any failure is reported)
+ *
+ * \param usartId [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ *
+ * \return Function processing state. Returns \ref USART_REQUEST_OK if request was processed
+ *         without problems (also if data handling is not initialized). Otherwise returns
+ *         \ref USART_REQUEST_ERROR.
+ */
+static usart_RequestState_t Usart_Set_XferDeinit( usart_PeriphId_t usartId )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( USART_BUS_CNT > usartId )
+    {
+        if( USART_FUNCTION_ACTIVE == usart_XferContext[ usartId ].InitState )
+        {
+            const usart_RequestState_t txStopState   = Usart_Set_TxStop( usartId );
+            const usart_RequestState_t rxStopState   = Usart_Set_RxStop( usartId );
+            const usart_RequestState_t txDeinitState = usart_TxModeLut[ usart_XferContext[ usartId ].Config.TxMode ].Deinit( usartId );
+            const usart_RequestState_t rxDeinitState = usart_RxModeLut[ usart_XferContext[ usartId ].Config.RxMode ].Deinit( usartId );
+            const usart_FunctionState_t irqUsed      = Usart_Get_IrqUsed( &usart_XferContext[ usartId ].Config );
+            usart_RequestState_t       irqState      = USART_REQUEST_OK;
+
+            if( USART_FUNCTION_ACTIVE == irqUsed )
+            {
+                irqState = Usart_Isr_Deinit( usartId );
+            }
+            else
+            {
+                /* USART interrupt is not used */
+            }
+
+            usart_XferContext[ usartId ].InitState = USART_FUNCTION_INACTIVE;
+
+            if( ( USART_REQUEST_OK == txStopState   ) &&
+                ( USART_REQUEST_OK == rxStopState   ) &&
+                ( USART_REQUEST_OK == txDeinitState ) &&
+                ( USART_REQUEST_OK == rxDeinitState ) &&
+                ( USART_REQUEST_OK == irqState      )    )
+            {
+                retState = USART_REQUEST_OK;
+            }
+            else
+            {
+                retState = USART_REQUEST_ERROR;
+            }
+        }
+        else
+        {
+            /* Data handling is not initialized */
+            retState = USART_REQUEST_OK;
+        }
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Returns whether the USART interrupt is used by the data handling (any direction in
+ *        DMA or ISR mode)
+ *
+ * \param dataConfig [in]: Pointer to data handling configuration. Must not be NULL.
+ *
+ * \return \ref USART_FUNCTION_ACTIVE if the USART interrupt is used, otherwise
+ *         \ref USART_FUNCTION_INACTIVE.
+ */
+static usart_FunctionState_t Usart_Get_IrqUsed( const usart_DataConfig_t * const dataConfig )
+{
+    usart_FunctionState_t irqUsed = USART_FUNCTION_INACTIVE;
+
+    if( USART_NULL_PTR != dataConfig )
+    {
+        if( ( USART_XFER_MODE_DMA == dataConfig->TxMode ) ||
+            ( USART_XFER_MODE_ISR == dataConfig->TxMode ) ||
+            ( USART_XFER_MODE_DMA == dataConfig->RxMode ) ||
+            ( USART_XFER_MODE_ISR == dataConfig->RxMode )    )
+        {
+            irqUsed = USART_FUNCTION_ACTIVE;
+        }
+        else
+        {
+            irqUsed = USART_FUNCTION_INACTIVE;
+        }
+    }
+    else
+    {
+        irqUsed = USART_FUNCTION_INACTIVE;
+    }
+
+    return ( irqUsed );
+}
+
+
+/**
+ * \brief Configuration check of unused direction (USART_XFER_MODE_NONE)
+ *
+ * \param usartId    [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ * \param dataConfig [in]: Pointer to data handling configuration. Must not be NULL.
+ *
+ * \return Returns \ref USART_REQUEST_OK for valid parameters, otherwise \ref USART_REQUEST_ERROR.
+ */
+static usart_RequestState_t Usart_None_Check_Config( usart_PeriphId_t usartId, const usart_DataConfig_t * const dataConfig )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( ( USART_BUS_CNT   > usartId    ) &&
+        ( USART_NULL_PTR != dataConfig )    )
+    {
+        retState = USART_REQUEST_OK;
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Initialization / deinitialization / stop of unused direction (nothing to be done)
+ *
+ * \param usartId [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ *
+ * \return Returns \ref USART_REQUEST_OK for valid peripheral, otherwise \ref USART_REQUEST_ERROR.
+ */
+static usart_RequestState_t Usart_None_XferInit( usart_PeriphId_t usartId )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( USART_BUS_CNT > usartId )
+    {
+        retState = USART_REQUEST_OK;
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Start of unused direction - not allowed
+ *
+ * \param usartId [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ *
+ * \return Always returns \ref USART_REQUEST_ERROR.
+ */
+static usart_RequestState_t Usart_None_XferStart( usart_PeriphId_t usartId )
+{
+    (void)usartId;
+
+    return ( USART_REQUEST_ERROR );
+}
+
+/* -------------------------------------------------------------------------- */
+/* ------------------- Private interface (see Usart.h) ---------------------- */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * \brief Returns CMSIS register pointer of a USART/UART peripheral (for data transfer handlers)
+ *
+ * \param usartId    [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ * \param periphReg [out]: Pointer to store the register pointer. Must not be NULL.
+ *
+ * \return Function processing state. Returns \ref USART_REQUEST_OK if request
+ *         was processed without problems. Otherwise returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Get_PeriphReg( usart_PeriphId_t usartId, USART_TypeDef ** const periphReg )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( ( USART_BUS_CNT   > usartId   ) &&
+        ( USART_NULL_PTR != periphReg )    )
+    {
+        *periphReg = usart_PeriphConf[ usartId ].PeriphReg;
+        retState   = USART_REQUEST_OK;
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Returns GPDMA requests of a USART/UART peripheral (for DMA data transfer handler)
+ *
+ * \param usartId    [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ * \param txRequest [out]: Pointer to store the transmission request. Must not be NULL.
+ * \param rxRequest [out]: Pointer to store the reception request. Must not be NULL.
+ *
+ * \return Function processing state. Returns \ref USART_REQUEST_OK if request
+ *         was processed without problems. Otherwise returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Get_PeriphDmaReq( usart_PeriphId_t usartId, gpdma_PeriphReqId_t * const txRequest, gpdma_PeriphReqId_t * const rxRequest )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( ( USART_BUS_CNT   > usartId   ) &&
+        ( USART_NULL_PTR != txRequest ) &&
+        ( USART_NULL_PTR != rxRequest )    )
+    {
+        *txRequest = usart_PeriphConf[ usartId ].PeriphDmaTxReq;
+        *rxRequest = usart_PeriphConf[ usartId ].PeriphDmaRxReq;
+        retState   = USART_REQUEST_OK;
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Returns data handling context of a USART/UART peripheral (for data transfer handlers)
+ *
+ * \param usartId      [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ * \param xferContext [out]: Pointer to store the context pointer. Must not be NULL.
+ *
+ * \return Function processing state. Returns \ref USART_REQUEST_OK if request
+ *         was processed without problems. Otherwise returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Get_XferContext( usart_PeriphId_t usartId, usart_XferContext_t ** const xferContext )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( ( USART_BUS_CNT   > usartId     ) &&
+        ( USART_NULL_PTR != xferContext )    )
+    {
+        *xferContext = &usart_XferContext[ usartId ];
+        retState     = USART_REQUEST_OK;
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Discards stale received data and clears reception flags (PE, FE, NE, ORE, IDLE, RTO)
+ *        before a reception start
+ *
+ * \note  Flags are set by HW at any time, the clear is not verified by read-back.
+ *
+ * \param usartId [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ *
+ * \return Function processing state. Returns \ref USART_REQUEST_OK if request
+ *         was processed without problems. Otherwise returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Set_RxFlagsClear( usart_PeriphId_t usartId )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( USART_BUS_CNT > usartId )
+    {
+        USART_TypeDef * const periphReg = usart_PeriphConf[ usartId ].PeriphReg;
+
+        (void)LL_USART_ReceiveData8( periphReg );
+        LL_USART_ClearFlag_PE( periphReg );
+        LL_USART_ClearFlag_FE( periphReg );
+        LL_USART_ClearFlag_NE( periphReg );
+        LL_USART_ClearFlag_ORE( periphReg );
+        LL_USART_ClearFlag_IDLE( periphReg );
+        LL_USART_ClearFlag_RTO( periphReg );
+
+        retState = USART_REQUEST_OK;
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Returns the next byte of the running transmission (ISR / POLL mode)
+ *
+ * \param usartId    [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ * \param txData    [out]: Pointer to store the byte. Must not be NULL.
+ * \param dataValid [out]: Pointer to store \ref USART_FUNCTION_ACTIVE if a byte was returned,
+ *                         \ref USART_FUNCTION_INACTIVE if all bytes were already taken or no
+ *                         transmission is running. Must not be NULL.
+ *
+ * \return Function processing state. Returns \ref USART_REQUEST_OK if request
+ *         was processed without problems. Otherwise returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Get_XferTxData( usart_PeriphId_t usartId, usart_TxData_t * const txData, usart_FunctionState_t * const dataValid )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( ( USART_BUS_CNT   > usartId   ) &&
+        ( USART_NULL_PTR != txData    ) &&
+        ( USART_NULL_PTR != dataValid )    )
+    {
+        if( ( USART_FUNCTION_ACTIVE               == usart_XferContext[ usartId ].TxState ) &&
+            ( USART_NULL_PTR                      != usart_XferContext[ usartId ].TxData  ) &&
+            ( usart_XferContext[ usartId ].TxSize  > usart_XferContext[ usartId ].TxIdx   )    )
+        {
+            *txData    = usart_XferContext[ usartId ].TxData[ usart_XferContext[ usartId ].TxIdx ];
+            *dataValid = USART_FUNCTION_ACTIVE;
+            usart_XferContext[ usartId ].TxIdx ++;
+        }
+        else
+        {
+            /* No byte left to be transmitted */
+            *dataValid = USART_FUNCTION_INACTIVE;
+        }
+
+        retState = USART_REQUEST_OK;
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Finishes the transmission (last stop bit sent) and reports TxCompleteCallback
+ *        (a new transmission can be started from the callback)
+ *
+ * \param usartId [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ *
+ * \return Function processing state. Returns \ref USART_REQUEST_OK if request
+ *         was processed without problems. Otherwise returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Set_XferTxDone( usart_PeriphId_t usartId )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( USART_BUS_CNT > usartId )
+    {
+        if( USART_FUNCTION_ACTIVE == usart_XferContext[ usartId ].TxState )
+        {
+            usart_XferContext[ usartId ].TxState = USART_FUNCTION_INACTIVE;
+
+            if( USART_NULL_PTR != usart_XferContext[ usartId ].Config.TxCompleteCallback )
+            {
+                usart_XferContext[ usartId ].Config.TxCompleteCallback();
+            }
+            else
+            {
+                /* Event is not reported */
+            }
+        }
+        else
+        {
+            /* Transmission was stopped meanwhile */
+        }
+
+        retState = USART_REQUEST_OK;
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Stores one received byte into RxBuffer (ISR / POLL mode) and reports half / full
+ *        buffer events
+ *
+ * \note  Bytes received while the reception is not running are dropped.
+ *
+ * \param usartId [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ * \param rxData  [in]: Received byte
+ *
+ * \return Function processing state. Returns \ref USART_REQUEST_OK if request
+ *         was processed without problems. Otherwise returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Set_XferRxData( usart_PeriphId_t usartId, usart_RxData_t rxData )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( USART_BUS_CNT > usartId )
+    {
+        retState = USART_REQUEST_OK;
+
+        if( ( USART_FUNCTION_ACTIVE                           == usart_XferContext[ usartId ].RxState         ) &&
+            ( USART_NULL_PTR                                  != usart_XferContext[ usartId ].Config.RxBuffer ) &&
+            ( usart_XferContext[ usartId ].Config.RxBufferSize > usart_XferContext[ usartId ].RxIdx           )    )
+        {
+            const usart_RxDataCnt_t halfSize = usart_XferContext[ usartId ].Config.RxBufferSize / USART_BUFFER_HALF_DIVIDER;
+
+            usart_XferContext[ usartId ].Config.RxBuffer[ usart_XferContext[ usartId ].RxIdx ] = rxData;
+            usart_XferContext[ usartId ].RxIdx ++;
+
+            if( ( 0u != halfSize ) && 
+            ( halfSize == usart_XferContext[ usartId ].RxIdx ) )
+            {
+                retState = Usart_Set_XferRxHalf( usartId );
+            }
+            else
+            {
+                /* Half of the buffer not reached in this step */
+            }
+
+            if( usart_XferContext[ usartId ].Config.RxBufferSize <= usart_XferContext[ usartId ].RxIdx )
+            {
+                retState = Usart_Set_XferRxDone( usartId );
+            }
+            else
+            {
+                /* Buffer is not full yet */
+            }
+        }
+        else
+        {
+            /* Reception is not running - byte is dropped */
+        }
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Reports half filled receive buffer (RxHalfCallback)
+ *
+ * \param usartId [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ *
+ * \return Function processing state. Returns \ref USART_REQUEST_OK if request
+ *         was processed without problems. Otherwise returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Set_XferRxHalf( usart_PeriphId_t usartId )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( USART_BUS_CNT > usartId )
+    {
+        if( USART_NULL_PTR != usart_XferContext[ usartId ].Config.RxHalfCallback )
+        {
+            usart_XferContext[ usartId ].Config.RxHalfCallback();
+        }
+        else
+        {
+            /* Event is not reported */
+        }
+
+        retState = USART_REQUEST_OK;
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Handles full receive buffer: circular buffer continues from RxBuffer[ 0 ], one shot
+ *        buffer stops the reception; then RxCompleteCallback is called (the reception can be
+ *        restarted from the callback)
+ *
+ * \param usartId [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ *
+ * \return Function processing state. Returns \ref USART_REQUEST_OK if request
+ *         was processed without problems. Otherwise returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Set_XferRxDone( usart_PeriphId_t usartId )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( USART_BUS_CNT > usartId )
+    {
+        if( USART_BUFFER_MODE_CIRCULAR == usart_XferContext[ usartId ].Config.RxBufferMode )
+        {
+            /* Next byte is stored to the buffer start (DMA is re-armed by Usart_Dma.c) */
+            usart_XferContext[ usartId ].RxIdx = 0u;
+            retState = USART_REQUEST_OK;
+        }
+        else
+        {
+            /* One shot - reception is stopped */
+            retState = Usart_Set_RxStop( usartId );
+        }
+
+        if( USART_NULL_PTR != usart_XferContext[ usartId ].Config.RxCompleteCallback )
+        {
+            usart_XferContext[ usartId ].Config.RxCompleteCallback();
+        }
+        else
+        {
+            /* Event is not reported */
+        }
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Handles end of received message: one shot reception is stopped, RxEndCallback is
+ *        called with the count of received bytes (the reception can be restarted from the
+ *        callback)
+ *
+ * \param usartId [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ *
+ * \return Function processing state. Returns \ref USART_REQUEST_OK if request
+ *         was processed without problems. Otherwise returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Set_XferRxEnd( usart_PeriphId_t usartId )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( USART_BUS_CNT > usartId )
+    {
+        usart_RxDataCnt_t rxCnt = 0u;
+
+        if( USART_FUNCTION_ACTIVE == usart_XferContext[ usartId ].RxState )
+        {
+            /* Count is read before the reception is stopped */
+            retState = Usart_Get_RxCount( usartId, &rxCnt );
+
+            if( ( USART_REQUEST_OK           == retState                                         ) && 
+                ( USART_BUFFER_MODE_ONE_SHOT == usart_XferContext[ usartId ].Config.RxBufferMode )    )
+            {
+                retState = Usart_Set_RxStop( usartId );
+            }
+            else
+            {
+                /* Circular buffer - reception continues */
+            }
+
+            if( ( USART_REQUEST_OK == retState                                          ) && 
+                ( USART_NULL_PTR   != usart_XferContext[ usartId ].Config.RxEndCallback )    )
+            {
+                usart_XferContext[ usartId ].Config.RxEndCallback( rxCnt );
+            }
+            else
+            {
+                /* Event is not reported */
+            }
+        }
+        else
+        {
+            /* Reception is not running */
+            retState = USART_REQUEST_OK;
+        }
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Reports a data transfer error (ErrorCallback)
+ *
+ * \param usartId [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ * \param errorId [in]: Error identification, value from \ref usart_XferErrorId_t
+ *
+ * \return Function processing state. Returns \ref USART_REQUEST_OK if request
+ *         was processed without problems. Otherwise returns \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Set_XferError( usart_PeriphId_t usartId, usart_XferErrorId_t errorId )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( ( USART_BUS_CNT        > usartId ) && 
+        ( USART_XFER_ERROR_CNT > errorId )    )
+    {
+        if( USART_NULL_PTR != usart_XferContext[ usartId ].Config.ErrorCallback )
+        {
+            usart_XferContext[ usartId ].Config.ErrorCallback( errorId );
+        }
+        else
+        {
+            /* Error is not reported */
+        }
+
+        retState = USART_REQUEST_OK;
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
+
+/**
+ * \brief Clears pending reception error flags (PE, FE, NE, ORE) and reports every pending error
+ *
+ * \param usartId  [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
+ * \param isrFlags [in]: Snapshot of USART ISR register (flags read before clearing)
+ *
+ * \return Function processing state. Returns \ref USART_REQUEST_OK if request
+ *         was processed without problems (also if no error is pending). Otherwise returns
+ *         \ref USART_REQUEST_ERROR.
+ */
+usart_RequestState_t Usart_Set_XferRxErrors( usart_PeriphId_t usartId, uint32_t isrFlags )
+{
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
+
+    if( USART_BUS_CNT > usartId )
+    {
+        retState = USART_REQUEST_OK;
+
+        if( 0u != ( USART_ISR_ERROR_MASK & isrFlags ) )
+        {
+            LL_USART_ClearFlag_PE( usart_PeriphConf[ usartId ].PeriphReg );
+            LL_USART_ClearFlag_FE( usart_PeriphConf[ usartId ].PeriphReg );
+            LL_USART_ClearFlag_NE( usart_PeriphConf[ usartId ].PeriphReg );
+            LL_USART_ClearFlag_ORE( usart_PeriphConf[ usartId ].PeriphReg );
+
+            for( usart_XferErrorId_t errorId = USART_XFER_ERROR_PARITY; USART_XFER_ERROR_CNT > errorId; errorId ++ )
+            {
+                const uint32_t errorFlag = (uint32_t)usart_RxErrorFlagLut[ errorId ];
+
+                if( ( USART_ERROR_NONE != errorFlag                ) && 
+                    ( 0u               != ( errorFlag & isrFlags ) )    )
+                {
+                    retState = Usart_Set_XferError( usartId, errorId );
+                }
+                else
+                {
+                    /* Error is not pending or has no flag */
+                }
+            }
+        }
+        else
+        {
+            /* No reception error pending */
+        }
+    }
+    else
+    {
+        retState = USART_REQUEST_ERROR;
+    }
+
+    return ( retState );
+}
+
 /* =========================== INTERRUPT HANDLERS =========================== */
 
 /**
- * \brief Global interrupt handler.
+ * \brief Global interrupt handler - the USART interrupt is used only by the data transfer
+ *        handlers (see Usart_Isr.c)
  *
  * \param usartId [in]: USART/UART bus identification
  */
-inline void Usart_GlobalIsrHandler( usart_PeriphId_t usartId )
+static inline void Usart_GlobalIsrHandler( usart_PeriphId_t usartId )
 {
-    /*----------------------------- Error interrupt --------------------------*/
-    if( ( 0u != LL_USART_IsActiveFlag_PE( usart_PeriphConf[ usartId ].PeriphReg )  ) ||
-        ( 0u != LL_USART_IsActiveFlag_FE( usart_PeriphConf[ usartId ].PeriphReg )  ) ||
-        ( 0u != LL_USART_IsActiveFlag_NE( usart_PeriphConf[ usartId ].PeriphReg )  ) ||
-        ( 0u != LL_USART_IsActiveFlag_ORE( usart_PeriphConf[ usartId ].PeriphReg ) )    )
-    {
-        /* Bit 3 ORE: Overrun error
-         * This bit is set by hardware when the data currently being received in the shift register is
-         * ready to be transferred into the USART_RDR register while RXNE = 1. It is cleared by a
-         * software, writing 1 to the ORECF, in the USART_ICR register.
-         * An interrupt is generated if RXNEIE = 1 or EIE = 1 in the USART_CR1 register.
-         * 0: No overrun error
-         * 1: Overrun error is detected
-         * Note: When this bit is set, the USART_RDR register content is not lost but the shift register is
-         * overwritten. An interrupt is generated if the ORE flag is set during multi buffer
-         * communication if the EIE bit is set.
-         * This bit is permanently forced to 0 (no overrun detection) when the bit OVRDIS is set in
-         * the USART_CR3 register.
-         *
-         * Bit 2 NE: Noise detection flag
-         * This bit is set by hardware when noise is detected on a received frame. It is cleared by
-         * software, writing 1 to the NECF bit in the USART_ICR register.
-         * 0: No noise is detected
-         * 1: Noise is detected
-         * Note: This bit does not generate an interrupt as it appears at the same time as the RXNE bit
-         * which itself generates an interrupt. An interrupt is generated when the NE flag is set
-         * during multi buffer communication if the EIE bit is set.
-         * When the line is noise-free, the NE flag can be disabled by programming the ONEBIT
-         * bit to 1 to increase the USART tolerance to deviations (Refer to Section 50.5.8:
-         * Tolerance of the USART receiver to clock deviation on page 1731).
-         *
-         * Bit 1 FE: Framing error
-         * This bit is set by hardware when a de-synchronization, excessive noise or a break character
-         * is detected. It is cleared by software, writing 1 to the FECF bit in the USART_ICR register.
-         * When transmitting data in Smartcard mode, this bit is set when the maximum number of
-         * transmit attempts is reached without success (the card NACKs the data frame).
-         * An interrupt is generated if EIE = 1 in the USART_CR1 register.
-         * 0: No Framing error is detected
-         * 1: Framing error or break character is detected
-         *
-         * Bit 0 PE: Parity error
-         * This bit is set by hardware when a parity error occurs in receiver mode. It is cleared by
-         * software, writing 1 to the PECF in the USART_ICR register.
-         * An interrupt is generated if PEIE = 1 in the USART_CR1 register.
-         * 0: No parity error
-         * 1: Parity error */
-        LL_USART_ReceiveData9( usart_PeriphConf[ usartId ].PeriphReg );
-        LL_USART_ClearFlag_PE( usart_PeriphConf[ usartId ].PeriphReg );
-        LL_USART_ClearFlag_FE( usart_PeriphConf[ usartId ].PeriphReg );
-        LL_USART_ClearFlag_NE( usart_PeriphConf[ usartId ].PeriphReg );
-        LL_USART_ClearFlag_ORE( usart_PeriphConf[ usartId ].PeriphReg );
-
-        if( USART_NULL_PTR != usart_RuntimeData[ usartId ].ErrorIsr )
-        {
-            usart_RuntimeData[ usartId ].ErrorIsr( (uint16_t) usart_PeriphConf[ usartId ].PeriphReg->ISR & USART_ISR_ERROR_MASK );
-        }
-        else
-        {
-            /* Interrupt callback was not configured */
-        }
-    }
-
-    /*------------------ Receive timeout (RTO) interrupt ---------------------*/
-    if( 0u != LL_USART_IsActiveFlag_RTO( usart_PeriphConf[ usartId ].PeriphReg ) )
-    {
-        /* Bit 11 RTOF: Receiver timeout
-         * This bit is set by hardware when the timeout value, programmed in the RTOR register has
-         * lapsed, without any communication. It is cleared by software, writing 1 to the RTOCF bit in
-         * the USART_ICR register.
-         * An interrupt is generated if RTOIE = 1 in the USART_CR2 register.
-         * In Smartcard mode, the timeout corresponds to the CWT or BWT timings.
-         * 0: Timeout value not reached
-         * 1: Timeout value reached without any data reception
-         * Note: If a time equal to the value programmed in RTOR register separates 2 characters,
-         * RTOF is not set. If this time exceeds this value + 2 sample times (2/16 or 2/8,
-         * depending on the oversampling method), RTOF flag is set.
-         * The counter counts even if RE = 0 but RTOF is set only when RE = 1. If the timeout has
-         * already elapsed when RE is set, then RTOF is set.
-         * If the USART does not support the Receiver timeout feature, this bit is reserved and
-         * kept at reset value. */
-        LL_USART_ClearFlag_RTO( usart_PeriphConf[ usartId ].PeriphReg );
-
-        if( USART_NULL_PTR != usart_RuntimeData[ usartId ].RxTimeoutIsr )
-        {
-            usart_RuntimeData[ usartId ].RxTimeoutIsr();
-        }
-        else
-        {
-            /* Interrupt callback was not configured */
-        }
-    }
-
-    /*----------------------- IDLE Line detected interrupt -------------------*/
-    if( 0u != LL_USART_IsActiveFlag_IDLE( usart_PeriphConf[ usartId ].PeriphReg ) )
-    {
-        /* Bit 4 IDLE: Idle line detected
-         * This bit is set by hardware when an Idle Line is detected. An interrupt is generated if
-         * IDLEIE = 1 in the USART_CR1 register. It is cleared by software, writing 1 to the IDLECF in
-         * the USART_ICR register.
-         * 0: No Idle line is detected
-         * 1: Idle line is detected
-         * Note: The IDLE bit is not set again until the RXNE bit has been set (i.e. a new idle line
-         * occurs).
-         * If Mute mode is enabled (MME = 1), IDLE is set if the USART is not mute (RWU = 0),
-         * whatever the Mute mode selected by the WAKE bit. If RWU = 1, IDLE is not set. */
-        LL_USART_ClearFlag_IDLE( usart_PeriphConf[ usartId ].PeriphReg );
-
-        if( USART_NULL_PTR != usart_RuntimeData[ usartId ].IdleIsr )
-        {
-            usart_RuntimeData[ usartId ].IdleIsr();
-        }
-        else
-        {
-            /* Interrupt callback was not configured */
-        }
-
-    }
-
-    /*-------------- Receiver buffer Not Empty (RXNE) interrupt --------------*/
-    if( 0u != LL_USART_IsActiveFlag_RXNE( usart_PeriphConf[ usartId ].PeriphReg ) )
-    {
-        /* Bit 5 RXNE: Read data register not empty
-         * RXNE bit is set by hardware when the content of the USART_RDR shift register has been
-         * transferred to the USART_RDR register. It is cleared by reading from the USART_RDR
-         * register. The RXNE flag can also be cleared by writing 1 to the RXFRQ in the USART_RQR
-         * register.
-         * An interrupt is generated if RXNEIE = 1 in the USART_CR1 register.
-         * 0: Data is not received
-         * 1: Received data is ready to be read. */
-        if( USART_NULL_PTR != usart_RuntimeData[ usartId ].RxNotEmptyIsr )
-        {
-            usart_RuntimeData[ usartId ].RxNotEmptyIsr( LL_USART_ReceiveData9( usart_PeriphConf[ usartId ].PeriphReg ) );
-        }
-    }
-
-    /*-------------- Transmission buffer Empty (TXE) interrupt ---------------*/
-    if( 0u != LL_USART_IsActiveFlag_TXE( usart_PeriphConf[ usartId ].PeriphReg ) )
-    {
-        /* Bit 7 TXE: Transmit data register empty
-         * TXE is set by hardware when the content of the USART_TDR register has been transferred
-         * into the shift register. It is cleared by writing to the USART_TDR register. The TXE flag can
-         * also be set by writing 1 to the TXFRQ in the USART_RQR register, in order to discard the
-         * data (only in Smartcard T = 0 mode, in case of transmission failure).
-         * An interrupt is generated if the TXEIE bit = 1 in the USART_CR1 register.
-         * 0: Data register full
-         * 1: Data register not full */
-        if( USART_NULL_PTR != usart_RuntimeData[ usartId ].TxEmptyIsr )
-        {
-            usart_RuntimeData[ usartId ].TxEmptyIsr();
-        }
-        else
-        {
-            /* Interrupt callback was not configured */
-        }
-    }
-
-    /*---------------- Transmission Complete (TC) interrupt ------------------*/
-    if( 0u != LL_USART_IsActiveFlag_TC( usart_PeriphConf[ usartId ].PeriphReg ) )
-    {
-        /* Bit 6 TC: Transmission complete
-         * This bit indicates that the last data written in the USART_TDR has been transmitted out of
-         * the shift register.
-         * It is set by hardware when the transmission of a frame containing data is complete and
-         * when TXE is set.
-         * An interrupt is generated if TCIE = 1 in the USART_CR1 register.
-         * TC bit is is cleared by software, by writing 1 to the TCCF in the USART_ICR register or by a
-         * write to the USART_TDR register.
-         * 0: Transmission is not complete
-         * 1: Transmission is complete
-         * Note: If TE bit is reset and no transmission is on going, the TC bit is set immediately. */
-        LL_USART_ClearFlag_TC( usart_PeriphConf[ usartId ].PeriphReg );
-
-        if( USART_NULL_PTR != usart_RuntimeData[ usartId ].TransferCompleteIsr )
-        {
-            usart_RuntimeData[ usartId ].TransferCompleteIsr();
-        }
-        else
-        {
-            /* Interrupt callback was not configured */
-        }
-    }
+    (void)Usart_Isr_Handler( usartId );
 }
 
 
@@ -4330,6 +4861,11 @@ void Usart_Usart6_IsrHandler(void)
 #endif /* UART5 */
 
 #ifdef UART7
+
+
+/**
+ * \brief UART7 interrupt service routine.
+ */
 static void Usart_Uart7_IsrHandler(void)
 {
     Usart_GlobalIsrHandler( USART_BUS_7 );
@@ -4337,6 +4873,11 @@ static void Usart_Uart7_IsrHandler(void)
 #endif /* UART7 */
 
 #ifdef UART8
+
+
+/**
+ * \brief UART8 interrupt service routine.
+ */
 static void Usart_Uart8_IsrHandler(void)
 {
     Usart_GlobalIsrHandler( USART_BUS_8 );
@@ -4344,6 +4885,11 @@ static void Usart_Uart8_IsrHandler(void)
 #endif /* UART8 */
 
 #ifdef UART9
+
+
+/**
+ * \brief UART9 interrupt service routine.
+ */
 static void Usart_Uart9_IsrHandler(void)
 {
     Usart_GlobalIsrHandler( USART_BUS_9 );
@@ -4351,6 +4897,11 @@ static void Usart_Uart9_IsrHandler(void)
 #endif /* UART9 */
 
 #ifdef USART10
+
+
+/**
+ * \brief USART10 interrupt service routine.
+ */
 static void Usart_Usart10_IsrHandler(void)
 {
     Usart_GlobalIsrHandler( USART_BUS_10 );
@@ -4358,6 +4909,11 @@ static void Usart_Usart10_IsrHandler(void)
 #endif /* USART10 */
 
 #ifdef USART11
+
+
+/**
+ * \brief USART11 interrupt service routine.
+ */
 static void Usart_Usart11_IsrHandler(void)
 {
     Usart_GlobalIsrHandler( USART_BUS_11 );
@@ -4365,6 +4921,11 @@ static void Usart_Usart11_IsrHandler(void)
 #endif /* USART11 */
 
 #ifdef UART12
+
+
+/**
+ * \brief UART12 interrupt service routine.
+ */
 static void Usart_Uart12_IsrHandler(void)
 {
     Usart_GlobalIsrHandler( USART_BUS_12 );
