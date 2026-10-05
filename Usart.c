@@ -80,6 +80,9 @@ static usart_RequestState_t Usart_Get_ExpectedPrescaler( usart_PeriphId_t usartI
                                                          usart_Baudrate_t baudrate,
                                                          usart_Prescaler_t *prescaler );
 
+static usart_RequestState_t Usart_Set_ConfigBegin    ( usart_PeriphId_t usartId, usart_FlagState_t * const periphState );
+static usart_RequestState_t Usart_Set_ConfigEnd      ( usart_PeriphId_t usartId, usart_FlagState_t periphState, usart_RequestState_t configState );
+
 static usart_RequestState_t Usart_Check_DataConfig   ( usart_PeriphId_t usartId, const usart_DataConfig_t * const dataConfig );
 static usart_RequestState_t Usart_Set_XferInit       ( usart_PeriphId_t usartId, const usart_DataConfig_t * const dataConfig );
 static usart_RequestState_t Usart_Set_XferDeinit     ( usart_PeriphId_t usartId );
@@ -106,11 +109,11 @@ static usart_RequestState_t Usart_None_XferStart     ( usart_PeriphId_t usartId 
 /** Receive buffer half is reached after RxBufferSize / USART_BUFFER_HALF_DIVIDER bytes */
 #define USART_BUFFER_HALF_DIVIDER     ( 2u )
 
-/** Samples per bit with 8x oversampling */
-#define USART_OVERSAMPLING_8_FACTOR   ( 8u )
+/** Minimal baud-rate divider (USARTDIV) supported by BRR register */
+#define USART_BRR_MIN_VALUE           ( 16u )
 
-/** Samples per bit with 16x oversampling */
-#define USART_OVERSAMPLING_16_FACTOR  ( 16u )
+/** Maximal baud-rate divider (USARTDIV) supported by BRR register */
+#define USART_BRR_MAX_VALUE           ( 0xFFFFu )
 
 /* =============================== MACROS =================================== */
 
@@ -727,20 +730,31 @@ usart_RequestState_t Usart_Set_Baudrate( usart_PeriphId_t usartId, usart_Baudrat
     usart_Oversampling_t oversampling   = USART_OVERSAMPLING_16;
     usart_FlagState_t    periphActState = USART_FLAG_INACTIVE;
     uint32_t             usartPeriphClk = 0;
-    usart_Prescaler_t    usartPrescaler = 0u;
+    usart_Prescaler_t    usartPrescaler = USART_PRESCALER_1;
 
-    retValue = Usart_Get_Oversampling( usartId, &oversampling );
+    if( ( USART_BUS_CNT > usartId  ) &&
+        ( 0u            < baudrate )    )
+    {
+        const rcc_RequestState_t rccRequestState = Rcc_Get_PeriphClk( usart_PeriphConf[ usartId ].PeriphRcc, &usartPeriphClk );
 
-    rcc_RequestState_t   rccRequestState    = Rcc_Get_PeriphClk( usart_PeriphConf[ usartId ].PeriphRcc, &usartPeriphClk );
-    usart_RequestState_t prescCalcState     = Usart_Get_ExpectedPrescaler( usartId, usartPeriphClk, oversampling, baudrate, &usartPrescaler);
-    usart_RequestState_t prescCalcConfState = Usart_Set_Prescaler( usartId, usartPrescaler );
+        retValue = Usart_Get_Oversampling( usartId, &oversampling );
 
-    if( ( 0u                  != baudrate           ) &&
-        ( RCC_REQUEST_ERROR   != rccRequestState    ) &&
-        ( USART_REQUEST_ERROR != prescCalcState     ) &&
-        ( USART_REQUEST_ERROR != prescCalcConfState ) &&
-        ( USART_REQUEST_ERROR != retValue           ) &&
-        ( USART_BUS_CNT        > usartId            )    )
+        if( ( USART_REQUEST_OK == retValue        ) &&
+            ( RCC_REQUEST_OK   == rccRequestState )    )
+        {
+            retValue = Usart_Get_ExpectedPrescaler( usartId, usartPeriphClk, oversampling, baudrate, &usartPrescaler );
+        }
+        else
+        {
+            retValue = USART_REQUEST_ERROR;
+        }
+    }
+    else
+    {
+        retValue = USART_REQUEST_ERROR;
+    }
+
+    if( USART_REQUEST_OK == retValue )
     {
         retValue = Usart_Get_PeriphState( usartId, &periphActState );
 
@@ -758,15 +772,35 @@ usart_RequestState_t Usart_Set_Baudrate( usart_PeriphId_t usartId, usart_Baudrat
 
             if( USART_REQUEST_ERROR != retValue )
             {
-                LL_USART_SetBaudRate( usart_PeriphConf[ usartId ].PeriphReg,
-                                      usartPeriphClk,
-                                      usartPrescaler,
-                                      oversampling,
-                                      baudrate );
+                /* PRESC and BRR are writable only when the peripheral is disabled */
+                retValue = Usart_Set_Prescaler( usartId, usartPrescaler );
+
+                if( USART_REQUEST_ERROR != retValue )
+                {
+                    LL_USART_SetBaudRate( usart_PeriphConf[ usartId ].PeriphReg,
+                                          usartPeriphClk,
+                                          usartPrescaler,
+                                          oversampling,
+                                          baudrate );
+                }
+                else
+                {
+                    /* Prescaler not applied, baud-rate is not changed */
+                }
 
                 if( USART_FLAG_ACTIVE == periphActState )
                 {
-                    retValue = Usart_Set_PeriphActive( usartId );
+                    /* Peripheral is enabled again also after failed configuration */
+                    const usart_RequestState_t enableState = Usart_Set_PeriphActive( usartId );
+
+                    if( USART_REQUEST_ERROR == enableState )
+                    {
+                        retValue = USART_REQUEST_ERROR;
+                    }
+                    else
+                    {
+                        /* Keep result of configuration */
+                    }
                 }
                 else
                 {
@@ -861,7 +895,7 @@ usart_RequestState_t Usart_Set_DataWidth( usart_PeriphId_t usartId, usart_DataWi
 
         if( USART_REQUEST_ERROR != retValue )
         {
-            if( USART_FLAG_INACTIVE == periphActState )
+            if( USART_FLAG_ACTIVE == periphActState )
             {
                 retValue = Usart_Set_PeriphInactive( usartId );
             }
@@ -891,14 +925,7 @@ usart_RequestState_t Usart_Set_DataWidth( usart_PeriphId_t usartId, usart_DataWi
                     }
                 }
 
-                if( USART_FLAG_INACTIVE != periphActState )
-                {
-                    retValue = Usart_Set_PeriphActive( usartId );
-                }
-                else
-                {
-                    /* Peripheral was inactive before configuration. */
-                }
+                retValue = Usart_Set_ConfigEnd( usartId, periphActState, retValue );
             }
             else
             {
@@ -968,7 +995,7 @@ usart_RequestState_t Usart_Set_StopBits( usart_PeriphId_t usartId, usart_StopBit
 
         if( USART_REQUEST_ERROR != retValue )
         {
-            if( USART_FLAG_INACTIVE == periphActState )
+            if( USART_FLAG_ACTIVE == periphActState )
             {
                 retValue = Usart_Set_PeriphInactive( usartId );
             }
@@ -998,14 +1025,7 @@ usart_RequestState_t Usart_Set_StopBits( usart_PeriphId_t usartId, usart_StopBit
                     }
                 }
 
-                if( USART_FLAG_INACTIVE != periphActState )
-                {
-                    retValue = Usart_Set_PeriphActive( usartId );
-                }
-                else
-                {
-                    /* Peripheral was inactive before configuration. */
-                }
+                retValue = Usart_Set_ConfigEnd( usartId, periphActState, retValue );
             }
             else
             {
@@ -1075,7 +1095,7 @@ usart_RequestState_t Usart_Set_Parity( usart_PeriphId_t usartId, usart_Parity_t 
 
         if( USART_REQUEST_ERROR != retValue )
         {
-            if( USART_FLAG_INACTIVE == periphActState )
+            if( USART_FLAG_ACTIVE == periphActState )
             {
                 retValue = Usart_Set_PeriphInactive( usartId );
             }
@@ -1105,14 +1125,7 @@ usart_RequestState_t Usart_Set_Parity( usart_PeriphId_t usartId, usart_Parity_t 
                     }
                 }
 
-                if( USART_FLAG_INACTIVE != periphActState )
-                {
-                    retValue = Usart_Set_PeriphActive( usartId );
-                }
-                else
-                {
-                    /* Peripheral was inactive before configuration. */
-                }
+                retValue = Usart_Set_ConfigEnd( usartId, periphActState, retValue );
             }
             else
             {
@@ -1246,22 +1259,36 @@ usart_RequestState_t Usart_Set_FlowControl( usart_PeriphId_t usartId, usart_Flow
 
     if( USART_BUS_CNT > usartId )
     {
-        LL_USART_SetHWFlowCtrl( usart_PeriphConf[ usartId ].PeriphReg, flowControl );
+        usart_FlagState_t periphActState = USART_FLAG_INACTIVE;
 
-        for( uint32_t iterationCnt = 0u; USART_TIMEOUT_RAW > iterationCnt; iterationCnt ++ )
+        /* Configuration is writable only when the peripheral is disabled */
+        retValue = Usart_Set_ConfigBegin( usartId, &periphActState );
+
+        if( USART_REQUEST_OK == retValue )
         {
-            flowControlReg = LL_USART_GetHWFlowCtrl( usart_PeriphConf[ usartId ].PeriphReg );
+            LL_USART_SetHWFlowCtrl( usart_PeriphConf[ usartId ].PeriphReg, flowControl );
 
-            if( flowControl == flowControlReg )
+            for( uint32_t iterationCnt = 0u; USART_TIMEOUT_RAW > iterationCnt; iterationCnt ++ )
             {
-                retValue = USART_REQUEST_OK;
-                break;
+                flowControlReg = LL_USART_GetHWFlowCtrl( usart_PeriphConf[ usartId ].PeriphReg );
+
+                if( flowControl == flowControlReg )
+                {
+                    retValue = USART_REQUEST_OK;
+                    break;
+                }
+                else
+                {
+                    /* Clock source has not yet been changed, keep return state as error */
+                    retValue = USART_REQUEST_ERROR;
+                }
             }
-            else
-            {
-                /* Clock source has not yet been changed, keep return state as error */
-                retValue = USART_REQUEST_ERROR;
-            }
+
+            retValue = Usart_Set_ConfigEnd( usartId, periphActState, retValue );
+        }
+        else
+        {
+            /* Peripheral could not be disabled */
         }
     }
     else
@@ -1315,29 +1342,43 @@ usart_RequestState_t Usart_Set_DriverEnableState( usart_PeriphId_t usartId, usar
 
     if( USART_BUS_CNT > usartId )
     {
-        if( USART_DE_DISABLED != deState )
-        {
-            LL_USART_EnableDEMode( usart_PeriphConf[ usartId ].PeriphReg );
-        }
-        else
-        {
-            LL_USART_DisableDEMode( usart_PeriphConf[ usartId ].PeriphReg );
-        }
+        usart_FlagState_t periphActState = USART_FLAG_INACTIVE;
 
-        for( uint32_t iterationCnt = 0u; USART_TIMEOUT_RAW > iterationCnt; iterationCnt ++ )
-        {
-            driverEnableReg = LL_USART_IsEnabledDEMode( usart_PeriphConf[ usartId ].PeriphReg );
+        /* Configuration is writable only when the peripheral is disabled */
+        retValue = Usart_Set_ConfigBegin( usartId, &periphActState );
 
-            if( deState == driverEnableReg )
+        if( USART_REQUEST_OK == retValue )
+        {
+            if( USART_DE_DISABLED != deState )
             {
-                retValue = USART_REQUEST_OK;
-                break;
+                LL_USART_EnableDEMode( usart_PeriphConf[ usartId ].PeriphReg );
             }
             else
             {
-                /* Clock source has not yet been changed, keep return state as error */
-                retValue = USART_REQUEST_ERROR;
+                LL_USART_DisableDEMode( usart_PeriphConf[ usartId ].PeriphReg );
             }
+
+            for( uint32_t iterationCnt = 0u; USART_TIMEOUT_RAW > iterationCnt; iterationCnt ++ )
+            {
+                driverEnableReg = LL_USART_IsEnabledDEMode( usart_PeriphConf[ usartId ].PeriphReg );
+
+                if( deState == driverEnableReg )
+                {
+                    retValue = USART_REQUEST_OK;
+                    break;
+                }
+                else
+                {
+                    /* Clock source has not yet been changed, keep return state as error */
+                    retValue = USART_REQUEST_ERROR;
+                }
+            }
+
+            retValue = Usart_Set_ConfigEnd( usartId, periphActState, retValue );
+        }
+        else
+        {
+            /* Peripheral could not be disabled */
         }
     }
     else
@@ -1391,22 +1432,36 @@ usart_RequestState_t Usart_Set_DriverEnablePolarity( usart_PeriphId_t usartId, u
 
     if( USART_BUS_CNT > usartId )
     {
-        LL_USART_SetDESignalPolarity( usart_PeriphConf[ usartId ].PeriphReg, dePolarity );
+        usart_FlagState_t periphActState = USART_FLAG_INACTIVE;
 
-        for( uint32_t iterationCnt = 0u; USART_TIMEOUT_RAW > iterationCnt; iterationCnt ++ )
+        /* Configuration is writable only when the peripheral is disabled */
+        retValue = Usart_Set_ConfigBegin( usartId, &periphActState );
+
+        if( USART_REQUEST_OK == retValue )
         {
-            driverEnableReg = LL_USART_GetDESignalPolarity( usart_PeriphConf[ usartId ].PeriphReg );
+            LL_USART_SetDESignalPolarity( usart_PeriphConf[ usartId ].PeriphReg, dePolarity );
 
-            if( dePolarity == driverEnableReg )
+            for( uint32_t iterationCnt = 0u; USART_TIMEOUT_RAW > iterationCnt; iterationCnt ++ )
             {
-                retValue = USART_REQUEST_OK;
-                break;
+                driverEnableReg = LL_USART_GetDESignalPolarity( usart_PeriphConf[ usartId ].PeriphReg );
+
+                if( dePolarity == driverEnableReg )
+                {
+                    retValue = USART_REQUEST_OK;
+                    break;
+                }
+                else
+                {
+                    /* Clock source has not yet been changed, keep return state as error */
+                    retValue = USART_REQUEST_ERROR;
+                }
             }
-            else
-            {
-                /* Clock source has not yet been changed, keep return state as error */
-                retValue = USART_REQUEST_ERROR;
-            }
+
+            retValue = Usart_Set_ConfigEnd( usartId, periphActState, retValue );
+        }
+        else
+        {
+            /* Peripheral could not be disabled */
         }
     }
     else
@@ -1488,44 +1543,58 @@ usart_RequestState_t Usart_Set_AssertDeassertTimes( usart_PeriphId_t usartId, us
 
     if( USART_BUS_CNT > usartId )
     {
-        usart_Baudrate_t     baudrateVal     = 0u;
-        usart_Oversampling_t oversamplingVal = 0u;
+        usart_FlagState_t periphActState = USART_FLAG_INACTIVE;
 
-        usart_RequestState_t baudRetValue       = Usart_Get_Baudrate( usartId, &baudrateVal );
-        usart_RequestState_t oversampleRetValue = Usart_Get_Oversampling( usartId, &oversamplingVal );
+        /* Configuration is writable only when the peripheral is disabled */
+        retValue = Usart_Set_ConfigBegin( usartId, &periphActState );
 
-        if( ( USART_REQUEST_ERROR != baudRetValue       ) &&
-            ( USART_REQUEST_ERROR != oversampleRetValue )    )
+        if( USART_REQUEST_OK == retValue )
         {
-            retValue = USART_REQUEST_OK;
+            usart_Baudrate_t     baudrateVal     = 0u;
+            usart_Oversampling_t oversamplingVal = 0u;
 
-            const uint8_t assertTargetVal   = Usart_Get_AssertDeassertRegValues( assertTime, baudrateVal, oversamplingVal );
-            const uint8_t deassertTargetVal = Usart_Get_AssertDeassertRegValues( deassertTime, baudrateVal, oversamplingVal );
+            usart_RequestState_t baudRetValue       = Usart_Get_Baudrate( usartId, &baudrateVal );
+            usart_RequestState_t oversampleRetValue = Usart_Get_Oversampling( usartId, &oversamplingVal );
 
-            LL_USART_SetDEAssertionTime( usart_PeriphConf[ usartId ].PeriphReg, assertTargetVal );
-            LL_USART_SetDEDeassertionTime( usart_PeriphConf[ usartId ].PeriphReg, deassertTargetVal );
-
-            for( uint32_t iterationCnt = 0u; USART_TIMEOUT_RAW > iterationCnt; iterationCnt ++ )
+            if( ( USART_REQUEST_ERROR != baudRetValue       ) &&
+                ( USART_REQUEST_ERROR != oversampleRetValue )    )
             {
-                uint8_t assertTimeReg   = LL_USART_GetDEAssertionTime( usart_PeriphConf[ usartId ].PeriphReg );
-                uint8_t deassertTimeReg = LL_USART_GetDEDeassertionTime( usart_PeriphConf[ usartId ].PeriphReg );
+                retValue = USART_REQUEST_OK;
 
-                if( ( assertTargetVal   == assertTimeReg   ) &&
-                    ( deassertTargetVal == deassertTimeReg )    )
+                const uint8_t assertTargetVal   = Usart_Get_AssertDeassertRegValues( assertTime, baudrateVal, oversamplingVal );
+                const uint8_t deassertTargetVal = Usart_Get_AssertDeassertRegValues( deassertTime, baudrateVal, oversamplingVal );
+
+                LL_USART_SetDEAssertionTime( usart_PeriphConf[ usartId ].PeriphReg, assertTargetVal );
+                LL_USART_SetDEDeassertionTime( usart_PeriphConf[ usartId ].PeriphReg, deassertTargetVal );
+
+                for( uint32_t iterationCnt = 0u; USART_TIMEOUT_RAW > iterationCnt; iterationCnt ++ )
                 {
-                    retValue = USART_REQUEST_OK;
-                    break;
-                }
-                else
-                {
-                    /* Clock source has not yet been changed, keep return state as error */
-                    retValue = USART_REQUEST_ERROR;
+                    uint8_t assertTimeReg   = LL_USART_GetDEAssertionTime( usart_PeriphConf[ usartId ].PeriphReg );
+                    uint8_t deassertTimeReg = LL_USART_GetDEDeassertionTime( usart_PeriphConf[ usartId ].PeriphReg );
+
+                    if( ( assertTargetVal   == assertTimeReg   ) &&
+                        ( deassertTargetVal == deassertTimeReg )    )
+                    {
+                        retValue = USART_REQUEST_OK;
+                        break;
+                    }
+                    else
+                    {
+                        /* Clock source has not yet been changed, keep return state as error */
+                        retValue = USART_REQUEST_ERROR;
+                    }
                 }
             }
+            else
+            {
+                retValue = USART_REQUEST_ERROR;
+            }
+
+            retValue = Usart_Set_ConfigEnd( usartId, periphActState, retValue );
         }
         else
         {
-            retValue = USART_REQUEST_ERROR;
+            /* Peripheral could not be disabled */
         }
     }
     else
@@ -1629,23 +1698,37 @@ usart_RequestState_t Usart_Set_Oversampling( usart_PeriphId_t usartId, usart_Ove
 
     if( USART_BUS_CNT > usartId )
     {
-        LL_USART_SetOverSampling( usart_PeriphConf[ usartId ].PeriphReg,
-                                  oversamplingMode );
+        usart_FlagState_t periphActState = USART_FLAG_INACTIVE;
 
-        for( uint32_t iterationCnt = 0u; USART_TIMEOUT_RAW > iterationCnt; iterationCnt ++ )
+        /* Configuration is writable only when the peripheral is disabled */
+        retValue = Usart_Set_ConfigBegin( usartId, &periphActState );
+
+        if( USART_REQUEST_OK == retValue )
         {
-            oversamplingReg = LL_USART_GetOverSampling( usart_PeriphConf[ usartId ].PeriphReg );
+            LL_USART_SetOverSampling( usart_PeriphConf[ usartId ].PeriphReg,
+                                      oversamplingMode );
 
-            if( oversamplingMode == oversamplingReg )
+            for( uint32_t iterationCnt = 0u; USART_TIMEOUT_RAW > iterationCnt; iterationCnt ++ )
             {
-                retValue = USART_REQUEST_OK;
-                break;
+                oversamplingReg = LL_USART_GetOverSampling( usart_PeriphConf[ usartId ].PeriphReg );
+
+                if( oversamplingMode == oversamplingReg )
+                {
+                    retValue = USART_REQUEST_OK;
+                    break;
+                }
+                else
+                {
+                    /* Clock source has not yet been changed, keep return state as error */
+                    retValue = USART_REQUEST_ERROR;
+                }
             }
-            else
-            {
-                /* Clock source has not yet been changed, keep return state as error */
-                retValue = USART_REQUEST_ERROR;
-            }
+
+            retValue = Usart_Set_ConfigEnd( usartId, periphActState, retValue );
+        }
+        else
+        {
+            /* Peripheral could not be disabled */
         }
     }
     else
@@ -1698,29 +1781,43 @@ usart_RequestState_t Usart_Set_HalfDuplexState( usart_PeriphId_t usartId, usart_
 
     if( USART_BUS_CNT > usartId )
     {
-        if( USART_HALF_DUPLEX_INACTIVE != halfDuplexState )
-        {
-            LL_USART_EnableHalfDuplex( usart_PeriphConf[ usartId ].PeriphReg );
-        }
-        else
-        {
-            LL_USART_DisableHalfDuplex( usart_PeriphConf[ usartId ].PeriphReg );
-        }
+        usart_FlagState_t periphActState = USART_FLAG_INACTIVE;
 
-        for( uint32_t iterationCnt = 0u; USART_TIMEOUT_RAW > iterationCnt; iterationCnt ++ )
-        {
-            halfDuplexStateReg = LL_USART_IsEnabledHalfDuplex( usart_PeriphConf[ usartId ].PeriphReg );
+        /* Configuration is writable only when the peripheral is disabled */
+        retValue = Usart_Set_ConfigBegin( usartId, &periphActState );
 
-            if( halfDuplexState == halfDuplexStateReg )
+        if( USART_REQUEST_OK == retValue )
+        {
+            if( USART_HALF_DUPLEX_INACTIVE != halfDuplexState )
             {
-                retValue = USART_REQUEST_OK;
-                break;
+                LL_USART_EnableHalfDuplex( usart_PeriphConf[ usartId ].PeriphReg );
             }
             else
             {
-                /* Clock source has not yet been changed, keep return state as error */
-                retValue = USART_REQUEST_ERROR;
+                LL_USART_DisableHalfDuplex( usart_PeriphConf[ usartId ].PeriphReg );
             }
+
+            for( uint32_t iterationCnt = 0u; USART_TIMEOUT_RAW > iterationCnt; iterationCnt ++ )
+            {
+                halfDuplexStateReg = LL_USART_IsEnabledHalfDuplex( usart_PeriphConf[ usartId ].PeriphReg );
+
+                if( halfDuplexState == halfDuplexStateReg )
+                {
+                    retValue = USART_REQUEST_OK;
+                    break;
+                }
+                else
+                {
+                    /* Clock source has not yet been changed, keep return state as error */
+                    retValue = USART_REQUEST_ERROR;
+                }
+            }
+
+            retValue = Usart_Set_ConfigEnd( usartId, periphActState, retValue );
+        }
+        else
+        {
+            /* Peripheral could not be disabled */
         }
     }
     else
@@ -1744,9 +1841,10 @@ usart_RequestState_t Usart_Get_HalfDuplexState( usart_PeriphId_t usartId, usart_
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
-    if( USART_BUS_CNT > usartId )
+    if( ( USART_BUS_CNT   > usartId         ) &&
+        ( USART_NULL_PTR != halfDuplexState )    )
     {
-        uint32_t halfDuplexStateReg = LL_USART_GetOverSampling( usart_PeriphConf[ usartId ].PeriphReg );
+        uint32_t halfDuplexStateReg = LL_USART_IsEnabledHalfDuplex( usart_PeriphConf[ usartId ].PeriphReg );
 
         if( 0u != halfDuplexStateReg )
         {
@@ -1920,25 +2018,39 @@ usart_RequestState_t Usart_Set_PinLevels( usart_PeriphId_t usartId, usart_RxPinL
 
     if( USART_BUS_CNT > usartId )
     {
-        LL_USART_SetRXPinLevel( usart_PeriphConf[ usartId ].PeriphReg, rxPinLevels );
-        LL_USART_SetTXPinLevel( usart_PeriphConf[ usartId ].PeriphReg, txPinLevels );
+        usart_FlagState_t periphActState = USART_FLAG_INACTIVE;
 
-        for( uint32_t iterationCnt = 0u; USART_TIMEOUT_RAW > iterationCnt; iterationCnt ++ )
+        /* Configuration is writable only when the peripheral is disabled */
+        retValue = Usart_Set_ConfigBegin( usartId, &periphActState );
+
+        if( USART_REQUEST_OK == retValue )
         {
-            uint32_t rxPinLevelReg = LL_USART_GetRXPinLevel( usart_PeriphConf[ usartId ].PeriphReg );
-            uint32_t txPinLevelReg = LL_USART_GetTXPinLevel( usart_PeriphConf[ usartId ].PeriphReg );
+            LL_USART_SetRXPinLevel( usart_PeriphConf[ usartId ].PeriphReg, rxPinLevels );
+            LL_USART_SetTXPinLevel( usart_PeriphConf[ usartId ].PeriphReg, txPinLevels );
 
-            if( ( rxPinLevels == rxPinLevelReg ) &&
-                ( txPinLevels == txPinLevelReg )    )
+            for( uint32_t iterationCnt = 0u; USART_TIMEOUT_RAW > iterationCnt; iterationCnt ++ )
             {
-                retValue = USART_REQUEST_OK;
-                break;
+                uint32_t rxPinLevelReg = LL_USART_GetRXPinLevel( usart_PeriphConf[ usartId ].PeriphReg );
+                uint32_t txPinLevelReg = LL_USART_GetTXPinLevel( usart_PeriphConf[ usartId ].PeriphReg );
+
+                if( ( rxPinLevels == rxPinLevelReg ) &&
+                    ( txPinLevels == txPinLevelReg )    )
+                {
+                    retValue = USART_REQUEST_OK;
+                    break;
+                }
+                else
+                {
+                    /* Clock source has not yet been changed, keep return state as error */
+                    retValue = USART_REQUEST_ERROR;
+                }
             }
-            else
-            {
-                /* Clock source has not yet been changed, keep return state as error */
-                retValue = USART_REQUEST_ERROR;
-            }
+
+            retValue = Usart_Set_ConfigEnd( usartId, periphActState, retValue );
+        }
+        else
+        {
+            /* Peripheral could not be disabled */
         }
     }
     else
@@ -1990,14 +2102,14 @@ usart_RequestState_t Usart_Get_PinLevels( usart_PeriphId_t usartId, usart_RxPinL
  * \return State of request execution. Returns "OK" if request was success,
  *         otherwise return error.
  */
-usart_RequestState_t Usart_Get_TxRegisterAddr( usart_PeriphId_t usartId, usart_RxRegAddr_t * const regAddr )
+usart_RequestState_t Usart_Get_TxRegisterAddr( usart_PeriphId_t usartId, usart_TxRegAddr_t * const regAddr )
 {
     usart_RequestState_t retValue = USART_REQUEST_ERROR;
 
     if( ( USART_BUS_CNT   > usartId ) &&
         ( USART_NULL_PTR != regAddr )    )
     {
-        *regAddr = usart_PeriphConf[ usartId ].PeriphReg->TDR;
+        *regAddr = (usart_TxRegAddr_t)LL_USART_DMA_GetRegAddr( usart_PeriphConf[ usartId ].PeriphReg, LL_USART_DMA_REG_DATA_TRANSMIT );
 
         retValue = USART_REQUEST_OK;
     }
@@ -2025,7 +2137,7 @@ usart_RequestState_t Usart_Get_RxRegisterAddr( usart_PeriphId_t usartId, usart_R
     if( ( USART_BUS_CNT   > usartId ) &&
         ( USART_NULL_PTR != regAddr )    )
     {
-        *regAddr = usart_PeriphConf[ usartId ].PeriphReg->RDR;
+        *regAddr = (usart_RxRegAddr_t)LL_USART_DMA_GetRegAddr( usart_PeriphConf[ usartId ].PeriphReg, LL_USART_DMA_REG_DATA_RECEIVE );
 
         retValue = USART_REQUEST_OK;
     }
@@ -3762,6 +3874,75 @@ usart_RequestState_t Usart_InitDeGpio( usart_DePin_t pinId )
 /* =========================== LOCAL FUNCTIONS ============================== */
 
 /**
+ * \brief Prepares the peripheral for change of configuration writable only with UE = 0
+ *
+ * The peripheral is disabled if it is enabled. The original state is returned
+ * and shall be passed to \ref Usart_Set_ConfigEnd after the configuration.
+ *
+ * \param usartId      [in]: USART/UART bus identification
+ * \param periphState [out]: Peripheral state before the configuration
+ * \return State of request execution. Returns "OK" if the peripheral is disabled,
+ *         otherwise return error.
+ */
+static usart_RequestState_t Usart_Set_ConfigBegin( usart_PeriphId_t usartId, usart_FlagState_t * const periphState )
+{
+    usart_RequestState_t retValue = USART_REQUEST_ERROR;
+
+    retValue = Usart_Get_PeriphState( usartId, periphState );
+
+    if( ( USART_REQUEST_OK  == retValue     ) &&
+        ( USART_FLAG_ACTIVE == *periphState )    )
+    {
+        retValue = Usart_Set_PeriphInactive( usartId );
+    }
+    else
+    {
+        /* Peripheral is already inactive or state not available */
+    }
+
+    return ( retValue );
+}
+
+
+/**
+ * \brief Finishes change of configuration started by \ref Usart_Set_ConfigBegin
+ *
+ * The peripheral is enabled again if it was enabled before the configuration -
+ * also when the configuration failed.
+ *
+ * \param usartId     [in]: USART/UART bus identification
+ * \param periphState [in]: Peripheral state before the configuration
+ * \param configState [in]: Result of the configuration
+ * \return State of request execution. Returns "OK" if the configuration and the
+ *         enabling were successful, otherwise return error.
+ */
+static usart_RequestState_t Usart_Set_ConfigEnd( usart_PeriphId_t usartId, usart_FlagState_t periphState, usart_RequestState_t configState )
+{
+    usart_RequestState_t retValue = configState;
+
+    if( USART_FLAG_ACTIVE == periphState )
+    {
+        const usart_RequestState_t enableState = Usart_Set_PeriphActive( usartId );
+
+        if( USART_REQUEST_OK != enableState )
+        {
+            retValue = USART_REQUEST_ERROR;
+        }
+        else
+        {
+            /* Keep result of configuration */
+        }
+    }
+    else
+    {
+        /* Peripheral was inactive before configuration */
+    }
+
+    return ( retValue );
+}
+
+
+/**
  * \brief Sets the prescaler value for the required USART/UART bus
  *
  * \param usartId   [in]: USART/UART bus identification
@@ -3836,6 +4017,10 @@ static usart_RequestState_t Usart_Get_Prescaler( usart_PeriphId_t usartId, usart
 /**
  * \brief Calculate expected prescaler value for USART/UART peripheral
  *
+ * The smallest prescaler is selected, for which the baud-rate divider (USARTDIV)
+ * lies within the range supported by BRR (16 - 0xFFFF). The smallest prescaler
+ * gives the best baud-rate resolution.
+ *
  * \param usartId      [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t.
  * \param periphClock  [in]: Peripheral clock in Hz
  * \param oversampling [in]: Peripheral over-sampling configuration
@@ -3843,7 +4028,7 @@ static usart_RequestState_t Usart_Get_Prescaler( usart_PeriphId_t usartId, usart
  * \param prescaler   [out]: Calculated prescaler value
  *
  * \return State of request execution. Returns "OK" if request was success,
- *         otherwise return error.
+ *         otherwise return error (baud-rate not reachable with given clock).
  */
 static usart_RequestState_t Usart_Get_ExpectedPrescaler( usart_PeriphId_t usartId,
                                                          usart_FreqHz_t periphClock,
@@ -3851,107 +4036,37 @@ static usart_RequestState_t Usart_Get_ExpectedPrescaler( usart_PeriphId_t usartI
                                                          usart_Baudrate_t baudrate,
                                                          usart_Prescaler_t *prescaler )
 {
-    uint32_t             prescValue         = 0u;
-    uint32_t             usartPeriphClk     = 0;
-    usart_RequestState_t retState           = USART_REQUEST_ERROR;
-    usart_Prescaler_t    lowerPrescId       = USART_PRESCALER_1;
-    usart_Prescaler_t    higherPrescId      = USART_PRESCALER_1;
-    uint32_t             dividerLower       = 0u;
-    uint32_t             dividerHigher      = 0u;
-    uint32_t             baudrateLower      = 0u;
-    uint32_t             baudrateHigher     = 0u;
-    uint32_t             baudrateDiffLower  = 0u;
-    uint32_t             baudrateDiffHigher = 0u;
+    usart_RequestState_t retState = USART_REQUEST_ERROR;
 
-    if( ( USART_BUS_CNT   > usartId   ) &&
-        ( 0u              < baudrate  ) &&
-        ( USART_NULL_PTR != prescaler )    )
+    if( ( USART_BUS_CNT   > usartId     ) &&
+        ( 0u              < baudrate    ) &&
+        ( 0u              < periphClock ) &&
+        ( USART_NULL_PTR != prescaler   )    )
     {
-        rcc_RequestState_t rccRequestState = Rcc_Get_PeriphClk( usart_PeriphConf[ usartId ].PeriphRcc, &usartPeriphClk );
-
-        if( RCC_REQUEST_ERROR != rccRequestState )
+        for( usart_Prescaler_t prescId = USART_PRESCALER_1; USART_PRESCALER_CNT > prescId; prescId++ )
         {
-            if( USART_OVERSAMPLING_8 == oversampling )
-            {
-                prescValue = periphClock / ( baudrate * USART_OVERSAMPLING_8_FACTOR );
-            }
-            else
-            {
-                prescValue = periphClock / ( baudrate * USART_OVERSAMPLING_16_FACTOR );
-            }
-
-            /* Find nearest possible value for prescaler */
-            for( uint32_t prescIndex = 0u; USART_PRESCALER_CNT > prescIndex; prescIndex++ )
-            {
-                if( USART_PRESCALER_TAB[ prescIndex ] > prescValue )
-                {
-                    higherPrescId = prescIndex;
-                    lowerPrescId  = prescIndex - 1u;
-                    break;
-                }
-            }
-
+            uint32_t usartDiv = 0u;
 
             if( USART_OVERSAMPLING_8 == oversampling )
             {
-                dividerLower = __LL_USART_DIV_SAMPLING8( usartPeriphClk,
-                                                         lowerPrescId,
-                                                         baudrate );
-
-                dividerHigher = __LL_USART_DIV_SAMPLING8( usartPeriphClk,
-                                                          higherPrescId,
-                                                          baudrate );
+                usartDiv = __LL_USART_DIV_SAMPLING8( periphClock, prescId, baudrate );
             }
             else
             {
-                dividerLower = __LL_USART_DIV_SAMPLING16( usartPeriphClk,
-                                                          lowerPrescId,
-                                                          baudrate );
-
-                dividerHigher = __LL_USART_DIV_SAMPLING16( usartPeriphClk,
-                                                           higherPrescId,
-                                                           baudrate );
-
-                baudrateLower = usartPeriphClk / ( ( USART_PRESCALER_TAB[ lowerPrescId ] + 1u ) * dividerLower );
-
-                baudrateHigher = usartPeriphClk / ( ( USART_PRESCALER_TAB[ higherPrescId ] + 1u ) * dividerHigher );
+                usartDiv = __LL_USART_DIV_SAMPLING16( periphClock, prescId, baudrate );
             }
 
-
-            if( baudrate > baudrateLower )
+            if( ( USART_BRR_MIN_VALUE <= usartDiv ) &&
+                ( USART_BRR_MAX_VALUE >= usartDiv )    )
             {
-                baudrateDiffLower = baudrate - baudrateLower;
+                *prescaler = prescId;
+                retState   = USART_REQUEST_OK;
+                break;
             }
             else
             {
-                baudrateDiffLower = baudrateLower - baudrate;
+                /* Divider out of range, try next prescaler */
             }
-
-
-            if( baudrate > baudrateHigher )
-            {
-                baudrateDiffHigher = baudrate - baudrateHigher;
-            }
-            else
-            {
-                baudrateDiffHigher = baudrateHigher - baudrate;
-            }
-
-
-            if( baudrateDiffHigher > baudrateDiffLower )
-            {
-                *prescaler = lowerPrescId;
-            }
-            else
-            {
-                *prescaler = higherPrescId;
-            }
-
-            retState = USART_REQUEST_OK;
-        }
-        else
-        {
-            retState = USART_REQUEST_ERROR;
         }
     }
     else

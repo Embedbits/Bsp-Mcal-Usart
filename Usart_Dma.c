@@ -8,7 +8,9 @@
  * GPDMA channel (8-bit, one block per transfer):
  * - Transmission: GPDMA transfer complete means the last byte was written to TDR - the USART
  *   TC interrupt is enabled then and the end of the transmission is reported from the USART
- *   interrupt (Usart_Isr.c), where the DMA transmit request is disabled.
+ *   interrupt (Usart_Isr.c). DMA transmit request (DMAT) stays enabled from the first
+ *   transmission until the de-initialization (errata ES0561 2.11.2 / ES0565 / ES0621: USART does
+ *   not generate DMA requests after setting/clearing DMAT bit).
  * - Reception: half / full buffer is reported from GPDMA interrupt, errors and end of received
  *   message (IDLE / RTO) from the USART interrupt (Usart_Isr.c). In circular buffer mode the
  *   channel is re-armed in the transfer complete interrupt (GPDMA module does not support
@@ -316,7 +318,14 @@ usart_RequestState_t Usart_Dma_TxInit( usart_PeriphId_t usartId )
 
 
 /**
- * \brief Deinitializes DMA transmission - GPDMA channel and its interrupt are disabled
+ * \brief Deinitializes DMA transmission - GPDMA channel and its interrupt are disabled, USART DMA
+ *        transmit request is disabled
+ *
+ * \note  Errata ES0561 2.11.2 (ES0565, ES0621): USART does not generate DMA requests after
+ *        setting/clearing DMAT bit. Enabled peripheral is disabled and enabled again (UE) after
+ *        DMAT is cleared, so a following DMA transmission (Usart_Set_DataConfig() without
+ *        peripheral reset) gets the requests again. Reception is stopped by the caller - a byte
+ *        received during the re-enable is lost.
  *
  * \param usartId [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
  *
@@ -325,9 +334,56 @@ usart_RequestState_t Usart_Dma_TxInit( usart_PeriphId_t usartId )
  */
 usart_RequestState_t Usart_Dma_TxDeinit( usart_PeriphId_t usartId )
 {
-    usart_RequestState_t retState = USART_REQUEST_ERROR;
+    usart_RequestState_t retState    = USART_REQUEST_ERROR;
+    usart_FlagState_t    dmaTxState  = USART_FLAG_INACTIVE;
+    usart_FlagState_t    periphState = USART_FLAG_INACTIVE;
 
     retState = Usart_Dma_Set_ChannelOff( usartId, USART_DMA_DIR_TX );
+
+    if( USART_REQUEST_OK == retState )
+    {
+        retState = Usart_Get_DmaTxReqState( usartId, &dmaTxState );
+    }
+    else
+    {
+        /* GPDMA channel could not be disabled */
+    }
+
+    if( ( USART_REQUEST_OK == retState ) && ( USART_FLAG_ACTIVE == dmaTxState ) )
+    {
+        retState = Usart_Set_DmaTxRequestInactive( usartId );
+
+        if( USART_REQUEST_OK == retState )
+        {
+            retState = Usart_Get_PeriphState( usartId, &periphState );
+        }
+        else
+        {
+            /* DMA transmit request could not be disabled */
+        }
+
+        if( ( USART_REQUEST_OK == retState ) && ( USART_FLAG_ACTIVE == periphState ) )
+        {
+            retState = Usart_Set_PeriphInactive( usartId );
+
+            if( USART_REQUEST_OK == retState )
+            {
+                retState = Usart_Set_PeriphActive( usartId );
+            }
+            else
+            {
+                /* Peripheral could not be disabled */
+            }
+        }
+        else
+        {
+            /* Disabled peripheral - DMA request generation is restored by its enable */
+        }
+    }
+    else
+    {
+        /* DMA transmit request was not used */
+    }
 
     return ( retState );
 }
@@ -336,6 +392,10 @@ usart_RequestState_t Usart_Dma_TxDeinit( usart_PeriphId_t usartId )
 /**
  * \brief Starts DMA transmission - GPDMA channel is armed for the data of the transmission and
  *        the USART DMA transmit request is enabled
+ *
+ * \note  DMA transmit request stays enabled after the first transmission (see
+ *        Usart_Dma_TxDeinit()). The request pending since the last byte of the previous
+ *        transmission (TXE) is served when the channel is enabled.
  *
  * \param usartId [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
  *
@@ -362,8 +422,9 @@ usart_RequestState_t Usart_Dma_TxStart( usart_PeriphId_t usartId )
 
 
 /**
- * \brief Stops DMA transmission - GPDMA channel, USART DMA transmit request and TC interrupt
- *        are disabled
+ * \brief Stops DMA transmission - GPDMA channel and TC interrupt are disabled
+ *
+ * \note  USART DMA transmit request stays enabled (see Usart_Dma_TxDeinit()).
  *
  * \param usartId [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
  *
@@ -381,7 +442,7 @@ usart_RequestState_t Usart_Dma_TxStop( usart_PeriphId_t usartId )
 
         if( GPDMA_REQUEST_OK == dmaState )
         {
-            retState = Usart_Set_DmaTxRequestInactive( usartId );
+            retState = USART_REQUEST_OK;
         }
         else
         {
@@ -981,10 +1042,10 @@ static usart_RequestState_t Usart_Dma_Set_Transfer( usart_PeriphId_t usartId, us
  * \brief Transmission transfer complete processing - all bytes were written to TDR, the USART
  *        TC interrupt reports the end of the transmission (last stop bit sent)
  *
- * \note  DMA transmit request is disabled here, while the last byte is still in TDR. USART
- *        generates the request on TXE event - the event after the last byte would otherwise
- *        leave a pending request with disabled GPDMA channel and the next transmission would
- *        never get a new request.
+ * \note  DMA transmit request is not disabled - clearing and setting DMAT stops the generation
+ *        of DMA requests (errata ES0561 2.11.2, see Usart_Dma_TxDeinit()). The request of the
+ *        TXE event after the last byte stays pending with disabled GPDMA channel and it is served
+ *        by the next transmission.
  *
  * \param usartId [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
  *
@@ -995,16 +1056,7 @@ static usart_RequestState_t Usart_Dma_TxCplt( usart_PeriphId_t usartId )
 {
     usart_RequestState_t retState = USART_REQUEST_ERROR;
 
-    retState = Usart_Set_DmaTxRequestInactive( usartId );
-
-    if( USART_REQUEST_OK == retState )
-    {
-        retState = Usart_Isr_Set_ItActive( usartId, USART_ISR_IT_TC );
-    }
-    else
-    {
-        /* DMA transmit request could not be disabled */
-    }
+    retState = Usart_Isr_Set_ItActive( usartId, USART_ISR_IT_TC );
 
     if( USART_REQUEST_OK != retState )
     {
