@@ -28,13 +28,13 @@ set( Usart_SourceFiles
 # List of public header files provided by the current library
 set( Usart_PublicHeaders 
     Usart_Types.h
-    Usart_Port.h 
+    Usart_Port.h
 )
 
 
 # List of dependent libraries that are publicly used by the current library
 set( Usart_PublicDependentLibs
-    Ral_Lib 
+    Ral_Lib
     Gpio_Lib
     Gpdma_Lib
 )
@@ -86,10 +86,9 @@ target_include_directories( Usart_Lib
     PUBLIC
         $<BUILD_INTERFACE:${PUBLIC_HEADERS_DIR}>
         $<INSTALL_INTERFACE:include>
-        Usart_PublicIncludeDirs
+        ${Usart_PublicIncludeDirs}
     PRIVATE
-        ${Usart_IncludeDirs}
-        Usart_PrivateIncludeDirs
+        ${Usart_PrivateIncludeDirs}
 )
 
 

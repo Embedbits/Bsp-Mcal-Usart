@@ -1,4 +1,9 @@
 /**
+ * \defgroup Usart Usart
+ * \brief Usart module
+ */
+
+/**
  * \author Mr.Nobody
  * \file Usart_Types.h
  * \ingroup Usart

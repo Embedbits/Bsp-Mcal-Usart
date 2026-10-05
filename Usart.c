@@ -250,12 +250,15 @@ usart_RequestState_t Usart_Init( usart_BusConfig_t * const usartConfig )
         /*------------- USART peripheral clock activation section ------------*/
         rccRequestState = Rcc_Get_PeriphState( usart_PeriphConf[ usartConfig->PeriphId ].PeriphRcc, &rccActivationState );
 
-        if( ( RCC_REQUEST_ERROR     != rccRequestState    ) &&
-            ( RCC_FUNCTION_INACTIVE == rccActivationState )    )
+        if( RCC_REQUEST_OK != rccRequestState )
+        {
+            retState = USART_REQUEST_ERROR;
+        }
+        else if( RCC_FUNCTION_INACTIVE == rccActivationState )
         {
             rccRequestState = Rcc_Set_PeriphActive( usart_PeriphConf[ usartConfig->PeriphId ].PeriphRcc );
 
-            if( RCC_REQUEST_ERROR == rccRequestState )
+            if( RCC_REQUEST_OK != rccRequestState )
             {
                 retState = USART_REQUEST_ERROR;
             }
@@ -266,34 +269,37 @@ usart_RequestState_t Usart_Init( usart_BusConfig_t * const usartConfig )
         }
 
         /*---------- USART peripheral GPIO initialization section ------------*/
-        if( ( USART_BIT_MASK_DECODE_PERIPH( usartConfig->BusRxPin ) == usartConfig->PeriphId ) &&
+        if( ( USART_REQUEST_ERROR                                   != retState              ) &&
+            ( USART_BIT_MASK_DECODE_PERIPH( usartConfig->BusRxPin ) == usartConfig->PeriphId ) &&
             ( USART_RX_PIN_UNUSED                                   != usartConfig->BusRxPin )    )
         {
-            Usart_InitRxGpio( usartConfig->BusRxPin );
+            retState = Usart_InitRxGpio( usartConfig->BusRxPin );
         }
         else
         {
-            /* RX pin configuration is not used */
+            /* RX pin configuration is not used or initialization failed */
         }
 
-        if( ( USART_BIT_MASK_DECODE_PERIPH( usartConfig->BusTxPin ) == usartConfig->PeriphId ) &&
+        if( ( USART_REQUEST_ERROR                                   != retState              ) &&
+            ( USART_BIT_MASK_DECODE_PERIPH( usartConfig->BusTxPin ) == usartConfig->PeriphId ) &&
             ( USART_TX_PIN_UNUSED                                   != usartConfig->BusTxPin )    )
         {
-            Usart_InitTxGpio( usartConfig->BusTxPin );
+            retState = Usart_InitTxGpio( usartConfig->BusTxPin );
         }
         else
         {
-            /* TX pin configuration is not used */
+            /* TX pin configuration is not used or initialization failed */
         }
 
-        if( ( USART_BIT_MASK_DECODE_PERIPH( usartConfig->BusDePin ) == usartConfig->PeriphId ) &&
+        if( ( USART_REQUEST_ERROR                                   != retState              ) &&
+            ( USART_BIT_MASK_DECODE_PERIPH( usartConfig->BusDePin ) == usartConfig->PeriphId ) &&
             ( USART_DE_PIN_UNUSED                                   != usartConfig->BusDePin )    )
         {
-            Usart_InitDeGpio( usartConfig->BusDePin );
+            retState = Usart_InitDeGpio( usartConfig->BusDePin );
         }
         else
         {
-            /* DE pin configuration is not used */
+            /* DE pin configuration is not used or initialization failed */
         }
 
         /*------------ USART peripheral initialization section ---------------*/

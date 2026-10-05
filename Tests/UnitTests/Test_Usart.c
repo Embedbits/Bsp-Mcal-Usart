@@ -301,6 +301,40 @@ void Ut_Usart_Init_ResetError_ReturnsErrorPeripheralNotEnabled( void )
 
 
 /**
+ * \brief   Usart_Init() reports GPIO pin initialization error.
+ *
+ * \details Gpio_Init() mock returns error for the RX pin, then the clock activation
+ *          fails before the pins are configured.
+ * \note    Bug AB#631: result of the pin initialization was ignored - OK was returned
+ *          and the peripheral enabled without working pins.
+ *
+ * \par Expected results
+ * - GPIO error: USART_REQUEST_ERROR, TX pin and peripheral reset not processed,
+ *   peripheral not enabled.
+ * - Clock error: USART_REQUEST_ERROR, Gpio_Init() not called.
+ */
+void Ut_Usart_Init_GpioError_ReturnsErrorPeripheralNotEnabled( void )
+{
+    usart_BusConfig_t config = Ut_Usart_Get_BusConfig();
+
+    config.BusTxPin = USART_TX_PIN_BUS1_PA9;
+    config.BusRxPin = USART_RX_PIN_BUS1_PA10;
+
+    Rcc_Get_PeriphState_StubWithCallback( Ut_Usart_RccGetStateStub );
+    Rcc_Set_PeriphActive_ExpectAndReturn( UT_USART_RCC, RCC_REQUEST_OK );
+    Gpio_Init_ExpectAnyArgsAndReturn( GPIO_REQUEST_ERROR );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Init( &config ) );
+    TEST_ASSERT_EQUAL_HEX32( 0u, UT_USART_REG->CR1 & USART_CR1_UE );
+
+    Rcc_Set_PeriphActive_ExpectAndReturn( UT_USART_RCC, RCC_REQUEST_ERROR );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Init( &config ) );
+    TEST_ASSERT_EQUAL_HEX32( 0u, UT_USART_REG->CR1 & USART_CR1_UE );
+}
+
+
+/**
  * \brief   Usart_Init() configures TX and RX pins.
  *
  * \details Initializes USART1 with TX pin PA9 and RX pin PA10.
