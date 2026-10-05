@@ -9,15 +9,43 @@ It supports initialization, configuration of communication parameters, DMA trans
 
 - Basic initialization and deinitialization
 - Configuration of baudrate, data width, stop bits, parity, transfer mode, flow control
-- Driver enable feature and polarity
-- Oversampling and half-duplex support
-- RX timeout configuration
-- Pin levels management
+- Oversampling and single-wire half-duplex support
 - Direct register access for TX/RX
-- Blocking and non-blocking transfers
-- DMA-based data transfers (TX/RX)
-- Full interrupt handling support with callbacks
-- GPIO pin initialization for USART signals
+- Data handling of buffers - transmission and reception configured independently in **DMA**,
+  **ISR** (USART interrupt) or **POLL** (`Usart_Task()`) mode, one shot or circular receive buffer,
+  end of message detection by idle line, callbacks for transmission complete, half / full receive
+  buffer, end of message and errors (`usart_DataConfig_t`)
+- Interrupt and DMA request control
+- GPIO pin initialization for USART signals (encoded pins `USART_*_PIN_BUSx_Pyy`, `USART_*_PIN_UNUSED`)
+
+The public interface is identical with the STM32H5 USART module (applications and middlewares,
+e.g. ModBus / CRSF, use the same interface).
+
+### STM32F4 specifics
+
+- Features of the interface not available on STM32F4 are kept but accept only the inactive /
+  standard configuration (otherwise `USART_REQUEST_ERROR`): receiver timeout (also
+  `USART_RX_END_TIMEOUT`), Driver Enable (DE) and its pins / times, pin level inversion, 7-bit word.
+- UART4 / UART5 / UART7 / UART8 do not support hardware flow control and 0.5 / 1.5 stop bits.
+- DMA: `usart_DmaChannelId_t` is a DMA stream. The stream has to be connected to the USART
+  request (RM0090 request mapping), channel selection is set by the module:
+
+| Peripheral | TX streams          | RX streams          |
+|------------|---------------------|---------------------|
+| USART1     | DMA2 S7             | DMA2 S2, DMA2 S5    |
+| USART2     | DMA1 S6             | DMA1 S5             |
+| USART3     | DMA1 S3, DMA1 S4    | DMA1 S1             |
+| UART4      | DMA1 S4             | DMA1 S2             |
+| UART5      | DMA1 S7             | DMA1 S0             |
+| USART6     | DMA2 S6, DMA2 S7    | DMA2 S1, DMA2 S2    |
+| UART7      | DMA1 S1             | DMA1 S3             |
+| UART8      | DMA1 S0             | DMA1 S6             |
+
+- Reception flags (RXNE, PE, FE, NE, ORE, IDLE) are cleared by read of SR followed by read of DR.
+  In DMA reception DR is read by the DMA stream, errors and idle line are reported from the USART
+  interrupt. DMA errors are reported as `USART_XFER_ERROR_DMA_TRANSFER`.
+- Data are handled as 8-bit values - 9-bit frames without parity are not supported by the data
+  handling.
 
 ---
 
@@ -69,7 +97,7 @@ It supports initialization, configuration of communication parameters, DMA trans
 ### Pin Management
 - `usart_RequestState_t    Usart_Set_PinLevels(usart_PeriphId_t usartId, usart_RxPinLevel_t rxPinLevels, usart_TxPinLevel_t txPinLevels);`
 - `usart_RequestState_t    Usart_Get_PinLevels(usart_PeriphId_t usartId, usart_RxPinLevel_t * const rxPinLevels, usart_TxPinLevel_t * const txPinLevels);`
-- `usart_RequestState_t    Usart_Get_TxRegisterAddr(usart_PeriphId_t usartId, usart_RxRegAddr_t * const regAddr);`
+- `usart_RequestState_t    Usart_Get_TxRegisterAddr(usart_PeriphId_t usartId, usart_TxRegAddr_t * const regAddr);`
 - `usart_RequestState_t    Usart_Get_RxRegisterAddr(usart_PeriphId_t usartId, usart_RxRegAddr_t * const regAddr);`
 
 ### Data Transfer
@@ -78,62 +106,41 @@ It supports initialization, configuration of communication parameters, DMA trans
 
 ---
 
-## DMA Support
-- `usart_RequestState_t    Usart_Init_Dma(usart_PeriphId_t usartId, usart_DmaConfig_t * const dmaConfig);`
-- TX:
-  - `usart_RequestState_t    Usart_Set_DmaTxStart(usart_PeriphId_t usartId, usart_TxDataCnt_t bytesCnt, usart_TxData_t * const dataBuff);`
-  - `usart_RequestState_t    Usart_Set_DmaTxStop(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_DmaTxRemainingCnt(usart_PeriphId_t usartId, usart_TxDataCnt_t * const bytesCnt);`
-- RX:
-  - `usart_RequestState_t    Usart_Set_DmaRxStart(usart_PeriphId_t usartId, usart_RxDataCnt_t bytesCnt, usart_RxData_t * const dataBuff);`
-  - `usart_RequestState_t    Usart_Set_DmaRxStop(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_DmaRxRemainingCnt(usart_PeriphId_t usartId, usart_RxDataCnt_t * const bytesCnt);`
-- DMA Requests:
-  - `usart_RequestState_t    Usart_Set_DmaTxRequestActive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Set_DmaTxRequestInactive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_DmaTxReqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
-  - `usart_RequestState_t    Usart_Set_DmaRxRequestActive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Set_DmaRxRequestInactive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_DmaRxReqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
+## Data Handling (DMA / ISR / POLL)
+- `usart_RequestState_t    Usart_Set_DataConfig(usart_PeriphId_t usartId, const usart_DataConfig_t * const dataConfig);`
+- `usart_RequestState_t    Usart_Get_DataConfig(usart_PeriphId_t usartId, usart_DataConfig_t * const dataConfig);`
+- `usart_RequestState_t    Usart_Set_TxStart(usart_PeriphId_t usartId, const usart_TxData_t * const txData, usart_TxDataCnt_t txSize);`
+- `usart_RequestState_t    Usart_Set_TxStop(usart_PeriphId_t usartId);`
+- `usart_RequestState_t    Usart_Get_TxState(usart_PeriphId_t usartId, usart_FunctionState_t * const txState);`
+- `usart_RequestState_t    Usart_Set_RxStart(usart_PeriphId_t usartId);`
+- `usart_RequestState_t    Usart_Set_RxStop(usart_PeriphId_t usartId);`
+- `usart_RequestState_t    Usart_Get_RxState(usart_PeriphId_t usartId, usart_FunctionState_t * const rxState);`
+- `usart_RequestState_t    Usart_Get_RxCount(usart_PeriphId_t usartId, usart_RxDataCnt_t * const rxCnt);`
+
+Data handling is configured by `usart_BusConfig_t::DataConfig` in `Usart_Init()` or later by
+`Usart_Set_DataConfig()`. POLL mode requires periodic call of `Usart_Task()`.
 
 ---
 
-## Interrupts and Callbacks
+## DMA Requests
+- `usart_RequestState_t    Usart_Set_DmaTxRequestActive(usart_PeriphId_t usartId);`
+- `usart_RequestState_t    Usart_Set_DmaTxRequestInactive(usart_PeriphId_t usartId);`
+- `usart_RequestState_t    Usart_Get_DmaTxReqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
+- `usart_RequestState_t    Usart_Set_DmaRxRequestActive(usart_PeriphId_t usartId);`
+- `usart_RequestState_t    Usart_Set_DmaRxRequestInactive(usart_PeriphId_t usartId);`
+- `usart_RequestState_t    Usart_Get_DmaRxReqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
+
+---
+
+## Interrupts
 - General:
   - `usart_RequestState_t    Usart_Set_InterruptsActive(usart_PeriphId_t usartBus);`
   - `usart_RequestState_t    Usart_Set_InterruptsInactive(usart_PeriphId_t usartBus);`
   - `usart_RequestState_t    Usart_Set_IrqPriority(usart_PeriphId_t usartId, usart_IrqPrio_t irqPrio);`
   - `usart_RequestState_t    Usart_Get_IrqPriority(usart_PeriphId_t usartId, usart_IrqPrio_t * const irqPrio);`
-- RX Not Empty:
-  - `usart_RequestState_t    Usart_Set_RxNotEmptyIrqActive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Set_RxNotEmptyIrqInactive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_RxNotEmptyIrqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
-  - `usart_RequestState_t    Usart_Set_RxNotEmptyIsrCallback(usart_PeriphId_t usartId, usart_RxNeIrqCallback_t * const callback);`
-- TX Empty:
-  - `usart_RequestState_t    Usart_Set_TxEmptyIrqActive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Set_TxEmptyIrqInactive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_TxEmptyIrqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
-  - `usart_RequestState_t    Usart_Set_TxEmptyIsrCallback(usart_PeriphId_t usartId, usart_TxeIrqCallback_t * const callback);`
-- TX Complete:
-  - `usart_RequestState_t    Usart_Set_TxCompleteIrqActive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Set_TxCompleteIrqInactive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_TxCompleteIrqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
-  - `usart_RequestState_t    Usart_Set_TxCompleteIsrCallback(usart_PeriphId_t usartId, usart_TcIrqCallback_t * const callback);`
-- Idle:
-  - `usart_RequestState_t    Usart_Set_IdleIrqActive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Set_IdleIrqInactive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_IdleIrqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
-  - `usart_RequestState_t    Usart_Set_IdleIsrCallback(usart_PeriphId_t usartId, usart_IdleIrqCallback_t * const callback);`
-- RX Timeout:
-  - `usart_RequestState_t    Usart_Set_RxTimeoutIrqActive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Set_RxTimeoutIrqInactive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_RxTimeoutIrqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
-  - `usart_RequestState_t    Usart_Set_RxTimeoutIsrCallback(usart_PeriphId_t usartId, usart_RxTimeoutIrqCallback_t * const callback);`
-- Error:
-  - `usart_RequestState_t    Usart_Set_ErrorIrqActive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Set_ErrorIrqInactive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_ErrorIrqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
-  - `usart_RequestState_t    Usart_Set_ErrorIsrCallback(usart_PeriphId_t usartId, usart_ErrIrqCallback_t * const callback);`
+- Interrupt sources (`Usart_Set_<Irq>IrqActive / Usart_Set_<Irq>IrqInactive / Usart_Get_<Irq>IrqState`,
+  `<Irq>` = `RxNotEmpty`, `TxEmpty`, `TxComplete`, `Idle`, `RxTimeout`, `Error`). The USART interrupt
+  handler serves the data handling - these functions are intended for diagnostics.
 
 ---
 
