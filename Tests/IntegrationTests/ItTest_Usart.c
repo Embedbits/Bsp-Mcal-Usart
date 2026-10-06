@@ -48,7 +48,11 @@ static void     It_Usart_ErrorCallback      ( usart_XferErrorId_t errorId );
 /* ========================= SYMBOLIC CONSTANTS ============================= */
 
 /*----------------------------- Board configuration --------------------------*/
-#if defined(IT_BOARD_STM32F4DISCOVERY)
+/* Boards are named by their MCU (IT_BOARD_<MCU>, name of the board from the detection) */
+#if defined(IT_BOARD_STM32F405xG) || \
+    defined(IT_BOARD_STM32F407xG) || \
+    defined(IT_BOARD_STM32F415xG) || \
+    defined(IT_BOARD_STM32F417xG)
 
     /** USART2 TX PA2 (header P1) - not connected on the board */
     #define IT_USART_BUS                    ( USART_BUS_2 )
@@ -61,7 +65,9 @@ static void     It_Usart_ErrorCallback      ( usart_XferErrorId_t errorId );
     #define IT_USART_DMA_TX_STREAM          ( USART_DMA_CHANNEL_6 )
     #define IT_USART_DMA_RX_STREAM          ( USART_DMA_CHANNEL_5 )
 
-#elif defined(IT_BOARD_NUCLEO_F401RE) || defined(IT_BOARD_NUCLEO_F411RE) || defined(IT_BOARD_NUCLEO_F446RE)
+#elif defined(IT_BOARD_STM32F401xE) || \
+      defined(IT_BOARD_STM32F411xE) || \
+      defined(IT_BOARD_STM32F446xE)
 
     /** USART1 TX PA9 (Arduino D8) - not connected on the board (USART2 PA2 / PA3 is ST-LINK VCP) */
     #define IT_USART_BUS                    ( USART_BUS_1 )
