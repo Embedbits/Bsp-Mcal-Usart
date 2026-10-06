@@ -614,7 +614,7 @@ usart_RequestState_t Usart_Isr_Handler( usart_PeriphId_t usartId )
         {
             LL_USART_ClearFlag_TC( periphReg );
 
-            /* DMA transmit request was already disabled by DMA transfer complete (Usart_Dma.c) */
+            /* DMA mode: DMA transmit request stays enabled (errata ES0561 2.11.2, Usart_Dma.c) */
             retState = Usart_Isr_Set_ItInactive( usartId, USART_ISR_IT_TC );
 
             if( USART_REQUEST_OK == retState )

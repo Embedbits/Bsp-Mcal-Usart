@@ -81,7 +81,7 @@ usart_RequestState_t    Usart_Get_RxTimeoutState        ( usart_PeriphId_t usart
 usart_RequestState_t    Usart_Set_PinLevels             ( usart_PeriphId_t usartId, usart_RxPinLevel_t rxPinLevels, usart_TxPinLevel_t txPinLevels );
 usart_RequestState_t    Usart_Get_PinLevels             ( usart_PeriphId_t usartId, usart_RxPinLevel_t * const rxPinLevels, usart_TxPinLevel_t * const txPinLevels );
 
-usart_RequestState_t    Usart_Get_TxRegisterAddr        ( usart_PeriphId_t usartId, usart_RxRegAddr_t * const regAddr );
+usart_RequestState_t    Usart_Get_TxRegisterAddr        ( usart_PeriphId_t usartId, usart_TxRegAddr_t * const regAddr );
 usart_RequestState_t    Usart_Get_RxRegisterAddr        ( usart_PeriphId_t usartId, usart_RxRegAddr_t * const regAddr );
 
 void                    Usart_SendData                  ( usart_PeriphId_t usartId, usart_TxData_t txData );
