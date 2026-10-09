@@ -28,7 +28,25 @@
 #include "MockGpio_Port.h"                  /* GPIO module mock               */
 #include "MockGpdma_Port.h"                 /* GPDMA module mock              */
 #include "Stm32_usart.h"                    /* USART registers definition     */
+#include <string.h>                         /* memset                         */
 /* ============================= TYPEDEFS =================================== */
+
+/** \brief Record of the calls of one GPDMA channel (Gpdma_* stubs) */
+typedef struct
+{
+    uint32_t            ActiveCnt;      /**< Gpdma_Set_ChannelActive() calls          */
+    uint32_t            InactiveCnt;    /**< Gpdma_Set_ChannelInactive() calls        */
+    uint32_t            IrqOnCnt;       /**< Gpdma_Set_InterruptActive() calls        */
+    uint32_t            IrqOffCnt;      /**< Gpdma_Set_InterruptInactive() calls      */
+    uint32_t            PrioCnt;        /**< Gpdma_Set_Priority() calls               */
+    uint32_t            HalfIsrCnt;     /**< Gpdma_Set_HalfTransferIsrHandler() calls */
+    uint32_t            HalfOnCnt;      /**< Gpdma_Set_HalfTransferIrqActive() calls  */
+    uint32_t            HalfOffCnt;     /**< Gpdma_Set_HalfTransferIrqInactive() calls */
+    gpdma_Priority_t    Prio;           /**< Last priority                            */
+    gpdma_BlockSize_t   BlockSize;      /**< Last block size                          */
+    gpdma_SrcAddr_t     SrcAddr;        /**< Last source address                      */
+    gpdma_DstAddr_t     DstAddr;        /**< Last destination address                 */
+}   utUsart_DmaChannel_t;
 
 /* ======================= FORWARD DECLARATIONS ============================= */
 
@@ -41,6 +59,23 @@ static usart_BusConfig_t    Ut_Usart_Get_BusConfig      ( void );
 static usart_DataConfig_t   Ut_Usart_Get_DataConfig     ( usart_XferMode_t xferMode, usart_RxDataCnt_t rxSize );
 static void                 Ut_Usart_Init               ( usart_BusConfig_t * const busConfig );
 static void                 Ut_Usart_Call_Isr           ( uint32_t isrFlags );
+static void                 Ut_Usart_Setup_DmaMocks     ( void );
+static usart_DataConfig_t   Ut_Usart_Get_DmaDataConfig  ( usart_BufferMode_t bufferMode );
+static uint32_t             Ut_Usart_Find_DmaInit       ( usart_DmaChannelId_t channelId );
+static utUsart_DmaChannel_t * Ut_Usart_Get_DmaChannel   ( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel );
+static gpdma_RequestState_t Ut_Usart_DmaInitStub        ( gpdma_ConfigStruct_t * const configStruct, int callCnt );
+static gpdma_RequestState_t Ut_Usart_DmaActiveStub      ( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, int callCnt );
+static gpdma_RequestState_t Ut_Usart_DmaInactiveStub    ( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, int callCnt );
+static gpdma_RequestState_t Ut_Usart_DmaIrqOnStub       ( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, int callCnt );
+static gpdma_RequestState_t Ut_Usart_DmaIrqOffStub      ( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, int callCnt );
+static gpdma_RequestState_t Ut_Usart_DmaPrioStub        ( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, gpdma_Priority_t channelPrio, int callCnt );
+static gpdma_RequestState_t Ut_Usart_DmaHalfIsrStub     ( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, gpdma_IsrCallback * const irqHandler, int callCnt );
+static gpdma_RequestState_t Ut_Usart_DmaHalfOnStub      ( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, int callCnt );
+static gpdma_RequestState_t Ut_Usart_DmaHalfOffStub     ( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, int callCnt );
+static gpdma_RequestState_t Ut_Usart_DmaBlockSizeStub   ( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, gpdma_BlockSize_t blockSize, int callCnt );
+static gpdma_RequestState_t Ut_Usart_DmaSrcAddrStub     ( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, gpdma_SrcAddr_t sourceAddr, int callCnt );
+static gpdma_RequestState_t Ut_Usart_DmaDstAddrStub     ( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, gpdma_DstAddr_t destAddr, int callCnt );
+static gpdma_RequestState_t Ut_Usart_DmaRemainingStub   ( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, gpdma_BlockSize_t * const blockSize, int callCnt );
 
 static void                 Ut_Usart_TxCompleteCallback ( void );
 static void                 Ut_Usart_RxHalfCallback     ( void );
@@ -68,6 +103,15 @@ static void                 Ut_Usart_ErrorCallback      ( usart_XferErrorId_t er
 /** Interrupt priority of test configurations */
 #define UT_USART_PRIO                       ( 6u )
 
+/** Count of GPDMA configurations stored by the Gpdma_Init() stub */
+#define UT_USART_DMA_CFG_CNT                ( 4u )
+
+/** Count of GPDMA channels recorded per GPDMA peripheral */
+#define UT_USART_DMA_CHANNELS               ( 16u )
+
+/** GPDMA errors reported to the user by the module */
+#define UT_USART_DMA_ERROR_MASK             ( GPDMA_ERROR_TRANSFER | GPDMA_ERROR_CONFIG_UPDATE | GPDMA_ERROR_CONFIG_ERROR | GPDMA_ERROR_TRIG_OVERRUN )
+
 /* ============================== MACROS ==================================== */
 
 /* ========================== LOCAL VARIABLES =============================== */
@@ -91,6 +135,28 @@ static uint32_t                 utUsart_ErrorCnt;
 /** Parameters of the last callback calls */
 static usart_RxDataCnt_t        utUsart_RxEndBytes;
 static usart_XferErrorId_t      utUsart_LastError;
+
+/** GPDMA configurations of Gpdma_Init() calls (structure and transfer configuration) */
+static gpdma_ConfigStruct_t     utUsart_DmaConfig[ UT_USART_DMA_CFG_CNT ];
+static gpdma_TransferConfig_t   utUsart_DmaXferConfig[ UT_USART_DMA_CFG_CNT ];
+static uint32_t                 utUsart_DmaInitCnt;
+
+/** Return values of the Gpdma_Init() and Gpdma_Set_ChannelActive() stubs */
+static gpdma_RequestState_t     utUsart_DmaInitState;
+static gpdma_RequestState_t     utUsart_DmaActiveState;
+
+/** Remaining block size returned by the Gpdma_Get_BlockSize() stub */
+static gpdma_BlockSize_t        utUsart_DmaRemaining;
+
+/** Records of GPDMA channel calls */
+static utUsart_DmaChannel_t     utUsart_DmaChannel[ GPDMA_PERIPH_CNT ][ UT_USART_DMA_CHANNELS ];
+
+/**
+ * Selector of the GPDMA channels of the next DMA data configuration. The GPDMA channel
+ * ownership of the module is static (a configured channel is reused, Gpdma_Init() is not
+ * called again), so every DMA test configures channels different from the previous test.
+ */
+static uint32_t                 utUsart_DmaChannelSel;
 
 /* ============================ TEST FIXTURE ================================ */
 
@@ -174,6 +240,8 @@ void Ut_Usart_Get_DefaultConfig_ReturnsDefaults( void )
     TEST_ASSERT_EQUAL( USART_RX_PIN_UNUSED,        config.BusRxPin );
     TEST_ASSERT_EQUAL( USART_TX_PIN_UNUSED,        config.BusTxPin );
     TEST_ASSERT_EQUAL( USART_DE_PIN_UNUSED,        config.BusDePin );
+    TEST_ASSERT_EQUAL( USART_CTS_PIN_UNUSED,       config.BusCtsPin );
+    TEST_ASSERT_EQUAL( USART_RTS_PIN_UNUSED,       config.BusRtsPin );
 }
 
 
@@ -359,6 +427,172 @@ void Ut_Usart_Init_TxRxPins_GpioConfigured( void )
     Rcc_Get_PeriphClk_StubWithCallback( Ut_Usart_RccGetClkStub );
 
     TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Init( &config ) );
+}
+
+
+/**
+ * \brief   Clear To Send (CTS) pin is configured in alternate function mode.
+ *
+ * \details Initializes the CTS pin PA11 of USART1 (AF7), then Gpio_Init() returns error.
+ *
+ * \par Expected results
+ * - Gpio_Init() called for PA11 with alternate function 7, push-pull, no pull, medium speed.
+ * - USART_REQUEST_OK, then USART_REQUEST_ERROR on the GPIO error.
+ */
+void Ut_Usart_InitCtsGpio_ConfiguresAlternateFunction( void )
+{
+    static gpio_Config_t expected;
+
+    expected                = (gpio_Config_t){ 0 };
+    expected.PortId         = GPIO_PORT_A;
+    expected.PinId          = GPIO_PIN_ID_11;
+    expected.PinMode        = GPIO_PIN_MODE_ALTERNATE;
+    expected.PinPull        = GPIO_PIN_PULL_NONE;
+    expected.PinSpeed       = GPIO_PIN_SPEED_MEDIUM;
+    expected.PinOutType     = GPIO_PIN_OUTPUT_PUSHPULL;
+    expected.PinAltFunction = GPIO_ALT_FUNC_7;
+
+    Gpio_Init_ExpectAndReturn( &expected, GPIO_REQUEST_OK );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_InitCtsGpio( USART_CTS_PIN_BUS1_PA11 ) );
+
+    Gpio_Init_ExpectAndReturn( &expected, GPIO_REQUEST_ERROR );
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_InitCtsGpio( USART_CTS_PIN_BUS1_PA11 ) );
+}
+
+
+/**
+ * \brief   Request To Send (RTS) pin is configured in alternate function mode.
+ *
+ * \details Initializes the RTS pin PA12 of USART1 (AF7), then Gpio_Init() returns error.
+ *
+ * \par Expected results
+ * - Gpio_Init() called for PA12 with alternate function 7, push-pull, no pull, medium speed.
+ * - USART_REQUEST_OK, then USART_REQUEST_ERROR on the GPIO error.
+ */
+void Ut_Usart_InitRtsGpio_ConfiguresAlternateFunction( void )
+{
+    static gpio_Config_t expected;
+
+    expected                = (gpio_Config_t){ 0 };
+    expected.PortId         = GPIO_PORT_A;
+    expected.PinId          = GPIO_PIN_ID_12;
+    expected.PinMode        = GPIO_PIN_MODE_ALTERNATE;
+    expected.PinPull        = GPIO_PIN_PULL_NONE;
+    expected.PinSpeed       = GPIO_PIN_SPEED_MEDIUM;
+    expected.PinOutType     = GPIO_PIN_OUTPUT_PUSHPULL;
+    expected.PinAltFunction = GPIO_ALT_FUNC_7;
+
+    Gpio_Init_ExpectAndReturn( &expected, GPIO_REQUEST_OK );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_InitRtsGpio( USART_RTS_PIN_BUS1_PA12 ) );
+
+    Gpio_Init_ExpectAndReturn( &expected, GPIO_REQUEST_ERROR );
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_InitRtsGpio( USART_RTS_PIN_BUS1_PA12 ) );
+}
+
+
+/**
+ * \brief   Usart_Init() configures the CTS and RTS pins of the hardware flow control.
+ *
+ * \details Initializes USART1 with the CTS pin PA11 and the RTS pin PA12.
+ *
+ * \par Expected results
+ * - Gpio_Init() called for the CTS pin and for the RTS pin (after clock enabling, before peripheral reset).
+ * - USART_REQUEST_OK.
+ */
+void Ut_Usart_Init_FlowControlPins_GpioConfigured( void )
+{
+    static gpio_Config_t expectedCts;
+    static gpio_Config_t expectedRts;
+    usart_BusConfig_t    config = Ut_Usart_Get_BusConfig();
+
+    expectedCts                = (gpio_Config_t){ 0 };
+    expectedCts.PortId         = GPIO_PORT_A;
+    expectedCts.PinId          = GPIO_PIN_ID_11;
+    expectedCts.PinMode        = GPIO_PIN_MODE_ALTERNATE;
+    expectedCts.PinPull        = GPIO_PIN_PULL_NONE;
+    expectedCts.PinSpeed       = GPIO_PIN_SPEED_MEDIUM;
+    expectedCts.PinOutType     = GPIO_PIN_OUTPUT_PUSHPULL;
+    expectedCts.PinAltFunction = GPIO_ALT_FUNC_7;
+
+    expectedRts                = (gpio_Config_t){ 0 };
+    expectedRts.PortId         = GPIO_PORT_A;
+    expectedRts.PinId          = GPIO_PIN_ID_12;
+    expectedRts.PinMode        = GPIO_PIN_MODE_ALTERNATE;
+    expectedRts.PinPull        = GPIO_PIN_PULL_NONE;
+    expectedRts.PinSpeed       = GPIO_PIN_SPEED_MEDIUM;
+    expectedRts.PinOutType     = GPIO_PIN_OUTPUT_PUSHPULL;
+    expectedRts.PinAltFunction = GPIO_ALT_FUNC_7;
+
+    config.BusCtsPin = USART_CTS_PIN_BUS1_PA11;
+    config.BusRtsPin = USART_RTS_PIN_BUS1_PA12;
+
+    Rcc_Get_PeriphState_StubWithCallback( Ut_Usart_RccGetStateStub );
+    Rcc_Set_PeriphActive_ExpectAndReturn( UT_USART_RCC, RCC_REQUEST_OK );
+    Gpio_Init_ExpectAndReturn( &expectedCts, GPIO_REQUEST_OK );
+    Gpio_Init_ExpectAndReturn( &expectedRts, GPIO_REQUEST_OK );
+    Rcc_Set_ResetActive_ExpectAndReturn( UT_USART_RCC, RCC_REQUEST_OK );
+    Rcc_Set_ResetInactive_ExpectAndReturn( UT_USART_RCC, RCC_REQUEST_OK );
+    Rcc_Get_PeriphClk_StubWithCallback( Ut_Usart_RccGetClkStub );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Init( &config ) );
+}
+
+
+/**
+ * \brief   Usart_Init() ignores the CTS and RTS pins of another peripheral.
+ *
+ * \details Initializes USART1 with the CTS pin PA0 and the RTS pin PA1 of USART2.
+ *
+ * \par Expected results
+ * - Gpio_Init() not called (the mock would report an unexpected call).
+ * - USART_REQUEST_OK.
+ */
+void Ut_Usart_Init_FlowControlPinsOfOtherPeriph_GpioNotConfigured( void )
+{
+    usart_BusConfig_t config = Ut_Usart_Get_BusConfig();
+
+    config.BusCtsPin = USART_CTS_PIN_BUS2_PA0;
+    config.BusRtsPin = USART_RTS_PIN_BUS2_PA1;
+
+    Rcc_Get_PeriphState_StubWithCallback( Ut_Usart_RccGetStateStub );
+    Rcc_Set_PeriphActive_ExpectAndReturn( UT_USART_RCC, RCC_REQUEST_OK );
+    Rcc_Set_ResetActive_ExpectAndReturn( UT_USART_RCC, RCC_REQUEST_OK );
+    Rcc_Set_ResetInactive_ExpectAndReturn( UT_USART_RCC, RCC_REQUEST_OK );
+    Rcc_Get_PeriphClk_StubWithCallback( Ut_Usart_RccGetClkStub );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Init( &config ) );
+}
+
+
+/**
+ * \brief   Usart_Init() reports GPIO error of the flow control pins.
+ *
+ * \details Gpio_Init() mock returns error for the CTS pin, then for the RTS pin.
+ *
+ * \par Expected results
+ * - CTS pin error: USART_REQUEST_ERROR, RTS pin and peripheral reset not processed, peripheral not enabled.
+ * - RTS pin error: USART_REQUEST_ERROR, peripheral reset not processed, peripheral not enabled.
+ */
+void Ut_Usart_Init_FlowControlPinGpioError_ReturnsErrorPeripheralNotEnabled( void )
+{
+    usart_BusConfig_t config = Ut_Usart_Get_BusConfig();
+
+    config.BusCtsPin = USART_CTS_PIN_BUS1_PA11;
+    config.BusRtsPin = USART_RTS_PIN_BUS1_PA12;
+
+    Rcc_Get_PeriphState_StubWithCallback( Ut_Usart_RccGetStateStub );
+    Rcc_Set_PeriphActive_ExpectAndReturn( UT_USART_RCC, RCC_REQUEST_OK );
+    Gpio_Init_ExpectAnyArgsAndReturn( GPIO_REQUEST_ERROR );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Init( &config ) );
+    TEST_ASSERT_EQUAL_HEX32( 0u, UT_USART_REG->CR1 & USART_CR1_UE );
+
+    Rcc_Set_PeriphActive_ExpectAndReturn( UT_USART_RCC, RCC_REQUEST_OK );
+    Gpio_Init_ExpectAnyArgsAndReturn( GPIO_REQUEST_OK );
+    Gpio_Init_ExpectAnyArgsAndReturn( GPIO_REQUEST_ERROR );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Init( &config ) );
+    TEST_ASSERT_EQUAL_HEX32( 0u, UT_USART_REG->CR1 & USART_CR1_UE );
 }
 
 
@@ -1702,6 +1936,659 @@ void Ut_Usart_Task_PollModeTxInProgress_NoCompleteBeforeTc( void )
     TEST_ASSERT_EQUAL_UINT32( 0u, utUsart_TxCompleteCnt );
 }
 
+/* ------------------------ Driver enable (DE) timing ----------------------- */
+
+/**
+ * \brief   Driver enable assertion / de-assertion times are converted to sample times and back.
+ *
+ * \details Kernel clock 64 MHz, oversampling 16, 115200 Bd (BRR 556). Sets assertion time
+ *          5 us and de-assertion time 10 us, reads the DEAT / DEDT fields and the times back,
+ *          then sets times above the range of the 5 bit fields.
+ *
+ * \par Expected results
+ * - DEAT = 9, DEDT = 18 (time * baud rate * 16 sample times per bit).
+ * - Times read back 5 us and 10 us.
+ * - Too long times: DEAT = DEDT = 31 (maximum), USART_REQUEST_OK.
+ */
+void Ut_Usart_Set_AssertDeassertTimes_SampleTimesWrittenAndReadBack( void )
+{
+    usart_AssertTime_us_t   assertTime   = 0u;
+    usart_DeassertTime_us_t deassertTime = 0u;
+
+    Rcc_Get_PeriphClk_StubWithCallback( Ut_Usart_RccGetClkStub );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_Oversampling( UT_USART_BUS, USART_OVERSAMPLING_16 ) );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_Baudrate( UT_USART_BUS, UT_USART_BAUDRATE ) );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_AssertDeassertTimes( UT_USART_BUS, 5u, 10u ) );
+    TEST_ASSERT_EQUAL_UINT32( 9u,  LL_USART_GetDEAssertionTime( UT_USART_REG ) );
+    TEST_ASSERT_EQUAL_UINT32( 18u, LL_USART_GetDEDeassertionTime( UT_USART_REG ) );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Get_AssertDeassertTimes( UT_USART_BUS, &assertTime, &deassertTime ) );
+    TEST_ASSERT_EQUAL_UINT32( 5u,  assertTime );
+    TEST_ASSERT_EQUAL_UINT32( 10u, deassertTime );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_AssertDeassertTimes( UT_USART_BUS, 255u, 255u ) );
+    TEST_ASSERT_EQUAL_UINT32( 31u, LL_USART_GetDEAssertionTime( UT_USART_REG ) );
+    TEST_ASSERT_EQUAL_UINT32( 31u, LL_USART_GetDEDeassertionTime( UT_USART_REG ) );
+}
+
+
+/**
+ * \brief   Driver enable timing functions reject invalid arguments.
+ *
+ * \details Peripheral out of range, NULL output pointers.
+ *
+ * \par Expected results
+ * - USART_REQUEST_ERROR in all cases.
+ */
+void Ut_Usart_AssertDeassertTimes_InvalidArgs_ReturnsError( void )
+{
+    usart_AssertTime_us_t   assertTime   = 0u;
+    usart_DeassertTime_us_t deassertTime = 0u;
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Set_AssertDeassertTimes( USART_BUS_CNT, 5u, 5u ) );
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Get_AssertDeassertTimes( USART_BUS_CNT, &assertTime, &deassertTime ) );
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Get_AssertDeassertTimes( UT_USART_BUS, NULL, &deassertTime ) );
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Get_AssertDeassertTimes( UT_USART_BUS, &assertTime, NULL ) );
+}
+
+
+/**
+ * \brief   Driver enable pin is configured in alternate function mode.
+ *
+ * \details Initializes the DE pin PA12 of USART1 (AF7), then Gpio_Init() returns error.
+ *
+ * \par Expected results
+ * - Gpio_Init() called for PA12 with alternate function 7, push-pull, no pull, medium speed.
+ * - USART_REQUEST_OK, then USART_REQUEST_ERROR on the GPIO error.
+ */
+void Ut_Usart_InitDeGpio_ConfiguresAlternateFunction( void )
+{
+    static gpio_Config_t expected;
+
+    expected                = (gpio_Config_t){ 0 };
+    expected.PortId         = GPIO_PORT_A;
+    expected.PinId          = GPIO_PIN_ID_12;
+    expected.PinMode        = GPIO_PIN_MODE_ALTERNATE;
+    expected.PinPull        = GPIO_PIN_PULL_NONE;
+    expected.PinSpeed       = GPIO_PIN_SPEED_MEDIUM;
+    expected.PinOutType     = GPIO_PIN_OUTPUT_PUSHPULL;
+    expected.PinAltFunction = GPIO_ALT_FUNC_7;
+
+    Gpio_Init_ExpectAndReturn( &expected, GPIO_REQUEST_OK );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_InitDeGpio( USART_DE_PIN_BUS1_PA12 ) );
+
+    Gpio_Init_ExpectAndReturn( &expected, GPIO_REQUEST_ERROR );
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_InitDeGpio( USART_DE_PIN_BUS1_PA12 ) );
+}
+
+/* ----------------------------- DMA mode ----------------------------------- */
+
+/**
+ * \brief   DMA data configuration initializes the GPDMA channels of both directions.
+ *
+ * \details Configures DMA mode for transmission and reception (one shot buffer) and
+ *          evaluates the GPDMA configurations passed to Gpdma_Init().
+ *
+ * \par Expected results
+ * - Gpdma_Init() 2x, USART_REQUEST_OK.
+ * - Transmission: memory to peripheral, request USART1_TX, destination TDR (static), source
+ *   address increment, priority and channel of the configuration, no half transfer handler.
+ * - Reception: peripheral to memory, request USART1_RX, source RDR (static), destination the
+ *   receive buffer (increment), block size = buffer size, half transfer handler registered.
+ * - GPDMA errors transfer, configuration, configuration update and trigger overrun reported.
+ * - GPDMA interrupt of both channels enabled.
+ */
+void Ut_Usart_Set_DataConfig_Dma_ChannelsInitialized( void )
+{
+    usart_DataConfig_t dataConfig = Ut_Usart_Get_DmaDataConfig( USART_BUFFER_MODE_ONE_SHOT );
+    uint32_t           txIdx      = 0u;
+    uint32_t           rxIdx      = 0u;
+
+    Ut_Usart_Setup_DmaMocks();
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+    TEST_ASSERT_EQUAL_UINT32( 2u, utUsart_DmaInitCnt );
+
+    txIdx = Ut_Usart_Find_DmaInit( dataConfig.TxDmaChannelId );
+    rxIdx = Ut_Usart_Find_DmaInit( dataConfig.RxDmaChannelId );
+
+    TEST_ASSERT_EQUAL( (gpdma_PeriphId_t)dataConfig.TxDmaPeriphId, utUsart_DmaConfig[ txIdx ].PeriphId );
+    TEST_ASSERT_EQUAL( (gpdma_Priority_t)dataConfig.TxDmaPriority, utUsart_DmaConfig[ txIdx ].ChannelPrio );
+    TEST_ASSERT_EQUAL( GPDMA_DIR_MEMORY_TO_PERIPH,  utUsart_DmaXferConfig[ txIdx ].Direction );
+    TEST_ASSERT_EQUAL( GPDMA_REQ_USART1_TX,         utUsart_DmaXferConfig[ txIdx ].RequestSource );
+    TEST_ASSERT_EQUAL_HEX32( (uint32_t)(uintptr_t)&UT_USART_REG->TDR, utUsart_DmaXferConfig[ txIdx ].DestinationAddr );
+    TEST_ASSERT_EQUAL( GPDMA_ADDR_STATIC,           utUsart_DmaXferConfig[ txIdx ].DestinationAddrMode );
+    TEST_ASSERT_EQUAL( GPDMA_ADDR_INCREMENT,        utUsart_DmaXferConfig[ txIdx ].SourceAddrMode );
+    TEST_ASSERT_EQUAL( GPDMA_DATA_SIZE_8BITS,       utUsart_DmaXferConfig[ txIdx ].SourceDataSize );
+    TEST_ASSERT_NOT_NULL( utUsart_DmaConfig[ txIdx ].TransferCompleteIsr );
+    TEST_ASSERT_NOT_NULL( utUsart_DmaConfig[ txIdx ].ErrorIsr );
+    TEST_ASSERT_NULL( utUsart_DmaConfig[ txIdx ].HalfTransferIsr );
+    TEST_ASSERT_EQUAL( UT_USART_DMA_ERROR_MASK,     utUsart_DmaConfig[ txIdx ].ErrorMask );
+
+    TEST_ASSERT_EQUAL( (gpdma_PeriphId_t)dataConfig.RxDmaPeriphId, utUsart_DmaConfig[ rxIdx ].PeriphId );
+    TEST_ASSERT_EQUAL( (gpdma_Priority_t)dataConfig.RxDmaPriority, utUsart_DmaConfig[ rxIdx ].ChannelPrio );
+    TEST_ASSERT_EQUAL( GPDMA_DIR_PERIPH_TO_MEMORY,  utUsart_DmaXferConfig[ rxIdx ].Direction );
+    TEST_ASSERT_EQUAL( GPDMA_REQ_USART1_RX,         utUsart_DmaXferConfig[ rxIdx ].RequestSource );
+    TEST_ASSERT_EQUAL_HEX32( (uint32_t)(uintptr_t)&UT_USART_REG->RDR, utUsart_DmaXferConfig[ rxIdx ].SourceAddr );
+    TEST_ASSERT_EQUAL( GPDMA_ADDR_STATIC,           utUsart_DmaXferConfig[ rxIdx ].SourceAddrMode );
+    TEST_ASSERT_EQUAL_HEX32( (uint32_t)(uintptr_t)utUsart_RxBuf, utUsart_DmaXferConfig[ rxIdx ].DestinationAddr );
+    TEST_ASSERT_EQUAL( GPDMA_ADDR_INCREMENT,        utUsart_DmaXferConfig[ rxIdx ].DestinationAddrMode );
+    TEST_ASSERT_EQUAL_UINT32( UT_USART_RX_SIZE,     utUsart_DmaXferConfig[ rxIdx ].BlockSize );
+    TEST_ASSERT_NOT_NULL( utUsart_DmaConfig[ rxIdx ].TransferCompleteIsr );
+    TEST_ASSERT_NOT_NULL( utUsart_DmaConfig[ rxIdx ].HalfTransferIsr );
+    TEST_ASSERT_NOT_NULL( utUsart_DmaConfig[ rxIdx ].ErrorIsr );
+
+    TEST_ASSERT_EQUAL_UINT32( 1u, Ut_Usart_Get_DmaChannel( (gpdma_PeriphId_t)dataConfig.TxDmaPeriphId, (gpdma_ChannelId_t)dataConfig.TxDmaChannelId )->IrqOnCnt );
+    TEST_ASSERT_EQUAL_UINT32( 1u, Ut_Usart_Get_DmaChannel( (gpdma_PeriphId_t)dataConfig.RxDmaPeriphId, (gpdma_ChannelId_t)dataConfig.RxDmaChannelId )->IrqOnCnt );
+}
+
+
+/**
+ * \brief   DMA data configuration without half buffer callback registers no half transfer handler.
+ *
+ * \details Configures DMA mode with RxHalfCallback = NULL.
+ *
+ * \par Expected results
+ * - Reception GPDMA configuration has no half transfer handler.
+ */
+void Ut_Usart_Set_DataConfig_DmaWithoutHalfCallback_NoHalfTransferHandler( void )
+{
+    usart_DataConfig_t dataConfig = Ut_Usart_Get_DmaDataConfig( USART_BUFFER_MODE_ONE_SHOT );
+
+    dataConfig.RxHalfCallback = NULL;
+
+    Ut_Usart_Setup_DmaMocks();
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+
+    TEST_ASSERT_NULL( utUsart_DmaConfig[ Ut_Usart_Find_DmaInit( dataConfig.RxDmaChannelId ) ].HalfTransferIsr );
+}
+
+
+/**
+ * \brief   GPDMA initialization failure is reported.
+ *
+ * \details Gpdma_Init() returns error.
+ *
+ * \par Expected results
+ * - USART_REQUEST_ERROR, no GPDMA interrupt enabled.
+ */
+void Ut_Usart_Set_DataConfig_DmaInitFailure_ReturnsError( void )
+{
+    usart_DataConfig_t dataConfig = Ut_Usart_Get_DmaDataConfig( USART_BUFFER_MODE_ONE_SHOT );
+
+    Ut_Usart_Setup_DmaMocks();
+    utUsart_DmaInitState = GPDMA_REQUEST_ERROR;
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+    TEST_ASSERT_EQUAL_UINT32( 0u, Ut_Usart_Get_DmaChannel( (gpdma_PeriphId_t)dataConfig.TxDmaPeriphId, (gpdma_ChannelId_t)dataConfig.TxDmaChannelId )->IrqOnCnt );
+}
+
+
+/**
+ * \brief   Configured GPDMA channels are reused, only priority and half transfer are updated.
+ *
+ * \details Configures DMA mode, then configures it again with the same channels, other
+ *          priorities and without the half buffer callback.
+ *
+ * \par Expected results
+ * - Gpdma_Init() called only 2x (first configuration).
+ * - Second configuration: Gpdma_Set_Priority() with the new priorities, half transfer interrupt
+ *   of the reception channel disabled, the transmission channel keeps no half transfer handler.
+ */
+void Ut_Usart_Set_DataConfig_DmaSameChannels_PriorityUpdatedWithoutInit( void )
+{
+    usart_DataConfig_t       dataConfig = Ut_Usart_Get_DmaDataConfig( USART_BUFFER_MODE_ONE_SHOT );
+    utUsart_DmaChannel_t * txChannel = NULL;
+    utUsart_DmaChannel_t * rxChannel = NULL;
+
+    Ut_Usart_Setup_DmaMocks();
+    txChannel = Ut_Usart_Get_DmaChannel( (gpdma_PeriphId_t)dataConfig.TxDmaPeriphId, (gpdma_ChannelId_t)dataConfig.TxDmaChannelId );
+    rxChannel = Ut_Usart_Get_DmaChannel( (gpdma_PeriphId_t)dataConfig.RxDmaPeriphId, (gpdma_ChannelId_t)dataConfig.RxDmaChannelId );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+    TEST_ASSERT_EQUAL_UINT32( 2u, utUsart_DmaInitCnt );
+    TEST_ASSERT_EQUAL_UINT32( 0u, txChannel->PrioCnt );
+
+    dataConfig.TxDmaPriority  = USART_DMA_PRIORITY_VERYHIGH;
+    dataConfig.RxDmaPriority  = USART_DMA_PRIORITY_MEDIUM;
+    dataConfig.RxHalfCallback = NULL;
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+    TEST_ASSERT_EQUAL_UINT32( 2u, utUsart_DmaInitCnt );
+
+    TEST_ASSERT_EQUAL_UINT32( 1u, txChannel->PrioCnt );
+    TEST_ASSERT_EQUAL( (gpdma_Priority_t)USART_DMA_PRIORITY_VERYHIGH, txChannel->Prio );
+    TEST_ASSERT_EQUAL_UINT32( 1u, txChannel->HalfOffCnt );
+    TEST_ASSERT_EQUAL_UINT32( 1u, rxChannel->PrioCnt );
+    TEST_ASSERT_EQUAL( (gpdma_Priority_t)USART_DMA_PRIORITY_MEDIUM, rxChannel->Prio );
+    TEST_ASSERT_EQUAL_UINT32( 1u, rxChannel->HalfOffCnt );
+    TEST_ASSERT_EQUAL_UINT32( 0u, rxChannel->HalfIsrCnt );
+}
+
+
+/**
+ * \brief   Reused GPDMA channel enables the half transfer handler when the callback is added.
+ *
+ * \details Configures DMA mode without half buffer callback, then with it (same channels).
+ *
+ * \par Expected results
+ * - Second configuration: Gpdma_Set_HalfTransferIsrHandler() and
+ *   Gpdma_Set_HalfTransferIrqActive() of the reception channel, no new Gpdma_Init().
+ */
+void Ut_Usart_Set_DataConfig_DmaSameChannels_HalfTransferHandlerAdded( void )
+{
+    usart_DataConfig_t       dataConfig = Ut_Usart_Get_DmaDataConfig( USART_BUFFER_MODE_ONE_SHOT );
+    utUsart_DmaChannel_t * rxChannel = NULL;
+
+    Ut_Usart_Setup_DmaMocks();
+    rxChannel = Ut_Usart_Get_DmaChannel( (gpdma_PeriphId_t)dataConfig.RxDmaPeriphId, (gpdma_ChannelId_t)dataConfig.RxDmaChannelId );
+
+    dataConfig.RxHalfCallback = NULL;
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+
+    dataConfig.RxHalfCallback = Ut_Usart_RxHalfCallback;
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+
+    TEST_ASSERT_EQUAL_UINT32( 2u, utUsart_DmaInitCnt );
+    TEST_ASSERT_EQUAL_UINT32( 1u, rxChannel->HalfIsrCnt );
+    TEST_ASSERT_EQUAL_UINT32( 1u, rxChannel->HalfOnCnt );
+}
+
+
+/**
+ * \brief   DMA transmission programs the GPDMA channel and ends by the USART TC interrupt.
+ *
+ * \details
+ * 1. Starts transmission of 4 bytes.
+ * 2. Calls the captured GPDMA transfer complete handler.
+ * 3. Calls the USART ISR with TC.
+ *
+ * \par Expected results
+ * 1. Block size 4, source address the transmit buffer, channel enabled, CR3.DMAT set, TX active.
+ * 2. CR1.TCIE set, no complete callback yet.
+ * 3. Complete callback 1x, TX inactive.
+ */
+void Ut_Usart_Dma_Transmission_ChannelProgrammedAndTcInterruptEnds( void )
+{
+    usart_DataConfig_t     dataConfig = Ut_Usart_Get_DmaDataConfig( USART_BUFFER_MODE_ONE_SHOT );
+    usart_FunctionState_t  txState    = USART_FUNCTION_INACTIVE;
+    utUsart_DmaChannel_t * txChannel  = NULL;
+
+    Ut_Usart_Setup_DmaMocks();
+    txChannel = Ut_Usart_Get_DmaChannel( (gpdma_PeriphId_t)dataConfig.TxDmaPeriphId, (gpdma_ChannelId_t)dataConfig.TxDmaChannelId );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_TxStart( UT_USART_BUS, utUsart_TxBuf, 4u ) );
+
+    TEST_ASSERT_EQUAL_UINT32( 4u, txChannel->BlockSize );
+    TEST_ASSERT_EQUAL_HEX32( (uint32_t)(uintptr_t)utUsart_TxBuf, txChannel->SrcAddr );
+    TEST_ASSERT_EQUAL_UINT32( 1u, txChannel->ActiveCnt );
+    TEST_ASSERT_BITS_HIGH( USART_CR3_DMAT, UT_USART_REG->CR3 );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Get_TxState( UT_USART_BUS, &txState ) );
+    TEST_ASSERT_EQUAL( USART_FUNCTION_ACTIVE, txState );
+
+    utUsart_DmaConfig[ Ut_Usart_Find_DmaInit( dataConfig.TxDmaChannelId ) ].TransferCompleteIsr();
+
+    TEST_ASSERT_BITS_HIGH( USART_CR1_TCIE, UT_USART_REG->CR1 );
+    TEST_ASSERT_EQUAL_UINT32( 0u, utUsart_TxCompleteCnt );
+
+    Ut_Usart_Call_Isr( USART_ISR_TC );
+
+    TEST_ASSERT_EQUAL_UINT32( 1u, utUsart_TxCompleteCnt );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Get_TxState( UT_USART_BUS, &txState ) );
+    TEST_ASSERT_EQUAL( USART_FUNCTION_INACTIVE, txState );
+}
+
+
+/**
+ * \brief   DMA transmission start reports GPDMA channel enable error.
+ *
+ * \details Gpdma_Set_ChannelActive() returns error.
+ *
+ * \par Expected results
+ * - USART_REQUEST_ERROR, TX state inactive, DMAT not set.
+ */
+void Ut_Usart_Dma_TxStart_ChannelActivationError_ReturnsError( void )
+{
+    usart_DataConfig_t    dataConfig = Ut_Usart_Get_DmaDataConfig( USART_BUFFER_MODE_ONE_SHOT );
+    usart_FunctionState_t txState    = USART_FUNCTION_ACTIVE;
+
+    Ut_Usart_Setup_DmaMocks();
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+
+    utUsart_DmaActiveState = GPDMA_REQUEST_ERROR;
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Set_TxStart( UT_USART_BUS, utUsart_TxBuf, 4u ) );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Get_TxState( UT_USART_BUS, &txState ) );
+    TEST_ASSERT_EQUAL( USART_FUNCTION_INACTIVE, txState );
+    TEST_ASSERT_BITS_LOW( USART_CR3_DMAT, UT_USART_REG->CR3 );
+}
+
+
+/**
+ * \brief   Stopping the DMA transmission disables the GPDMA channel and the TC interrupt.
+ *
+ * \details Starts transmission, enables the TC interrupt by the GPDMA transfer complete
+ *          handler and stops the transmission.
+ *
+ * \par Expected results
+ * - Gpdma_Set_ChannelInactive() for the channel, CR1.TCIE cleared, TX state inactive.
+ */
+void Ut_Usart_Dma_TxStop_ChannelStoppedAndTcInterruptDisabled( void )
+{
+    usart_DataConfig_t     dataConfig = Ut_Usart_Get_DmaDataConfig( USART_BUFFER_MODE_ONE_SHOT );
+    usart_FunctionState_t  txState    = USART_FUNCTION_ACTIVE;
+    utUsart_DmaChannel_t * txChannel  = NULL;
+
+    Ut_Usart_Setup_DmaMocks();
+    txChannel = Ut_Usart_Get_DmaChannel( (gpdma_PeriphId_t)dataConfig.TxDmaPeriphId, (gpdma_ChannelId_t)dataConfig.TxDmaChannelId );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_TxStart( UT_USART_BUS, utUsart_TxBuf, 2u ) );
+    utUsart_DmaConfig[ Ut_Usart_Find_DmaInit( dataConfig.TxDmaChannelId ) ].TransferCompleteIsr();
+    TEST_ASSERT_BITS_HIGH( USART_CR1_TCIE, UT_USART_REG->CR1 );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_TxStop( UT_USART_BUS ) );
+
+    TEST_ASSERT_EQUAL_UINT32( 1u, txChannel->InactiveCnt );
+    TEST_ASSERT_BITS_LOW( USART_CR1_TCIE, UT_USART_REG->CR1 );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Get_TxState( UT_USART_BUS, &txState ) );
+    TEST_ASSERT_EQUAL( USART_FUNCTION_INACTIVE, txState );
+}
+
+
+/**
+ * \brief   DMA reception programs the GPDMA channel, one shot buffer ends by transfer complete.
+ *
+ * \details
+ * 1. Starts reception.
+ * 2. Calls the captured GPDMA transfer complete handler.
+ *
+ * \par Expected results
+ * 1. Block size = buffer size, destination = receive buffer, channel enabled, CR3.DMAR set,
+ *    RX active.
+ * 2. Receive complete callback 1x, RX inactive, the channel is not enabled again.
+ */
+void Ut_Usart_Dma_Reception_OneShot_CompleteCallbackAndStops( void )
+{
+    usart_DataConfig_t     dataConfig = Ut_Usart_Get_DmaDataConfig( USART_BUFFER_MODE_ONE_SHOT );
+    usart_FunctionState_t  rxState    = USART_FUNCTION_INACTIVE;
+    utUsart_DmaChannel_t * rxChannel  = NULL;
+
+    Ut_Usart_Setup_DmaMocks();
+    rxChannel = Ut_Usart_Get_DmaChannel( (gpdma_PeriphId_t)dataConfig.RxDmaPeriphId, (gpdma_ChannelId_t)dataConfig.RxDmaChannelId );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_RxStart( UT_USART_BUS ) );
+
+    TEST_ASSERT_EQUAL_UINT32( UT_USART_RX_SIZE, rxChannel->BlockSize );
+    TEST_ASSERT_EQUAL_HEX32( (uint32_t)(uintptr_t)utUsart_RxBuf, rxChannel->DstAddr );
+    TEST_ASSERT_EQUAL_UINT32( 1u, rxChannel->ActiveCnt );
+    TEST_ASSERT_BITS_HIGH( USART_CR3_DMAR, UT_USART_REG->CR3 );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Get_RxState( UT_USART_BUS, &rxState ) );
+    TEST_ASSERT_EQUAL( USART_FUNCTION_ACTIVE, rxState );
+
+    utUsart_DmaConfig[ Ut_Usart_Find_DmaInit( dataConfig.RxDmaChannelId ) ].TransferCompleteIsr();
+
+    TEST_ASSERT_EQUAL_UINT32( 1u, utUsart_RxCompleteCnt );
+    TEST_ASSERT_EQUAL_UINT32( 1u, rxChannel->ActiveCnt );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Get_RxState( UT_USART_BUS, &rxState ) );
+    TEST_ASSERT_EQUAL( USART_FUNCTION_INACTIVE, rxState );
+}
+
+
+/**
+ * \brief   Circular DMA reception arms the GPDMA channel again at the end of the buffer.
+ *
+ * \details Circular buffer mode, reception started, GPDMA transfer complete handler called 2x.
+ *
+ * \par Expected results
+ * - Receive complete callback 2x, the GPDMA channel is enabled again after every buffer
+ *   (3 activations in total), reception stays active.
+ */
+void Ut_Usart_Dma_Reception_Circular_ChannelRearmedEveryBuffer( void )
+{
+    usart_DataConfig_t     dataConfig = Ut_Usart_Get_DmaDataConfig( USART_BUFFER_MODE_CIRCULAR );
+    usart_FunctionState_t  rxState    = USART_FUNCTION_INACTIVE;
+    utUsart_DmaChannel_t * rxChannel  = NULL;
+
+    Ut_Usart_Setup_DmaMocks();
+    rxChannel = Ut_Usart_Get_DmaChannel( (gpdma_PeriphId_t)dataConfig.RxDmaPeriphId, (gpdma_ChannelId_t)dataConfig.RxDmaChannelId );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_RxStart( UT_USART_BUS ) );
+
+    utUsart_DmaConfig[ Ut_Usart_Find_DmaInit( dataConfig.RxDmaChannelId ) ].TransferCompleteIsr();
+    utUsart_DmaConfig[ Ut_Usart_Find_DmaInit( dataConfig.RxDmaChannelId ) ].TransferCompleteIsr();
+
+    TEST_ASSERT_EQUAL_UINT32( 2u, utUsart_RxCompleteCnt );
+    TEST_ASSERT_EQUAL_UINT32( 3u, rxChannel->ActiveCnt );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Get_RxState( UT_USART_BUS, &rxState ) );
+    TEST_ASSERT_EQUAL( USART_FUNCTION_ACTIVE, rxState );
+}
+
+
+/**
+ * \brief   Circular DMA reception reports an error when the channel can not be armed again.
+ *
+ * \details Circular buffer mode, reception started, Gpdma_Set_ChannelActive() fails, GPDMA
+ *          transfer complete handler is called.
+ *
+ * \par Expected results
+ * - Error callback 1x with USART_XFER_ERROR_DMA_TRANSFER, reception stopped (RX inactive), no
+ *   receive complete callback.
+ */
+void Ut_Usart_Dma_Reception_Circular_RearmError_ReportedAndStopped( void )
+{
+    usart_DataConfig_t    dataConfig = Ut_Usart_Get_DmaDataConfig( USART_BUFFER_MODE_CIRCULAR );
+    usart_FunctionState_t rxState    = USART_FUNCTION_ACTIVE;
+
+    Ut_Usart_Setup_DmaMocks();
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_RxStart( UT_USART_BUS ) );
+
+    utUsart_DmaActiveState = GPDMA_REQUEST_ERROR;
+    utUsart_DmaConfig[ Ut_Usart_Find_DmaInit( dataConfig.RxDmaChannelId ) ].TransferCompleteIsr();
+
+    TEST_ASSERT_EQUAL_UINT32( 1u, utUsart_ErrorCnt );
+    TEST_ASSERT_EQUAL( USART_XFER_ERROR_DMA_TRANSFER, utUsart_LastError );
+    TEST_ASSERT_EQUAL_UINT32( 0u, utUsart_RxCompleteCnt );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Get_RxState( UT_USART_BUS, &rxState ) );
+    TEST_ASSERT_EQUAL( USART_FUNCTION_INACTIVE, rxState );
+}
+
+
+/**
+ * \brief   GPDMA half transfer of the reception calls the half buffer callback.
+ *
+ * \details Reception started, captured GPDMA half transfer handler called.
+ *
+ * \par Expected results
+ * - Half buffer callback 1x, reception stays active.
+ */
+void Ut_Usart_Dma_Reception_HalfTransfer_CallsHalfCallback( void )
+{
+    usart_DataConfig_t    dataConfig = Ut_Usart_Get_DmaDataConfig( USART_BUFFER_MODE_ONE_SHOT );
+    usart_FunctionState_t rxState    = USART_FUNCTION_INACTIVE;
+
+    Ut_Usart_Setup_DmaMocks();
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_RxStart( UT_USART_BUS ) );
+
+    utUsart_DmaConfig[ Ut_Usart_Find_DmaInit( dataConfig.RxDmaChannelId ) ].HalfTransferIsr();
+
+    TEST_ASSERT_EQUAL_UINT32( 1u, utUsart_RxHalfCnt );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Get_RxState( UT_USART_BUS, &rxState ) );
+    TEST_ASSERT_EQUAL( USART_FUNCTION_ACTIVE, rxState );
+}
+
+
+/**
+ * \brief   Stopping the DMA reception disables the GPDMA channel and the DMA request.
+ *
+ * \details Reception started and stopped.
+ *
+ * \par Expected results
+ * - Gpdma_Set_ChannelInactive() for the reception channel, CR3.DMAR cleared, RX inactive.
+ * - Stop of a reception which is not running: USART_REQUEST_OK without GPDMA access.
+ */
+void Ut_Usart_Dma_RxStop_ChannelStoppedAndDmaRequestDisabled( void )
+{
+    usart_DataConfig_t     dataConfig = Ut_Usart_Get_DmaDataConfig( USART_BUFFER_MODE_ONE_SHOT );
+    usart_FunctionState_t  rxState    = USART_FUNCTION_ACTIVE;
+    utUsart_DmaChannel_t * rxChannel  = NULL;
+
+    Ut_Usart_Setup_DmaMocks();
+    rxChannel = Ut_Usart_Get_DmaChannel( (gpdma_PeriphId_t)dataConfig.RxDmaPeriphId, (gpdma_ChannelId_t)dataConfig.RxDmaChannelId );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_RxStart( UT_USART_BUS ) );
+    TEST_ASSERT_BITS_HIGH( USART_CR3_DMAR, UT_USART_REG->CR3 );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_RxStop( UT_USART_BUS ) );
+
+    TEST_ASSERT_EQUAL_UINT32( 1u, rxChannel->InactiveCnt );
+    TEST_ASSERT_BITS_LOW( USART_CR3_DMAR, UT_USART_REG->CR3 );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Get_RxState( UT_USART_BUS, &rxState ) );
+    TEST_ASSERT_EQUAL( USART_FUNCTION_INACTIVE, rxState );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_RxStop( UT_USART_BUS ) );
+    TEST_ASSERT_EQUAL_UINT32( 1u, rxChannel->InactiveCnt );
+}
+
+
+/**
+ * \brief   Count of received bytes is derived from the remaining GPDMA block size.
+ *
+ * \details Reception started, the GPDMA channel reports 3 remaining bytes, then more than
+ *          the buffer size and a read error.
+ *
+ * \par Expected results
+ * - 3 remaining: 5 received bytes of the 8 byte buffer, USART_REQUEST_OK.
+ * - Remaining count above the buffer size: USART_REQUEST_ERROR.
+ * - NULL pointer: USART_REQUEST_ERROR.
+ */
+void Ut_Usart_Get_RxCount_Dma_DerivedFromRemainingBlockSize( void )
+{
+    usart_DataConfig_t dataConfig = Ut_Usart_Get_DmaDataConfig( USART_BUFFER_MODE_ONE_SHOT );
+    usart_RxDataCnt_t  rxCnt      = 0u;
+
+    Ut_Usart_Setup_DmaMocks();
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_RxStart( UT_USART_BUS ) );
+
+    utUsart_DmaRemaining = 3u;
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Get_RxCount( UT_USART_BUS, &rxCnt ) );
+    TEST_ASSERT_EQUAL_UINT32( UT_USART_RX_SIZE - 3u, rxCnt );
+
+    utUsart_DmaRemaining = UT_USART_RX_SIZE + 1u;
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Get_RxCount( UT_USART_BUS, &rxCnt ) );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Get_RxCount( UT_USART_BUS, NULL ) );
+}
+
+
+/**
+ * \brief   GPDMA errors of both directions are reported to the user and stop the transfer.
+ *
+ * \details Transmission and reception started. The transmission error handler is called
+ *          with transfer, configuration, configuration update and trigger overrun error bits,
+ *          then the reception error handler with transfer error.
+ *
+ * \par Expected results
+ * - Error callback with USART_XFER_ERROR_DMA_TRANSFER / _DMA_CONFIG / _DMA_CONFIG_UPDATE /
+ *   _DMA_TRIGGER_OVERRUN for the respective bit, TX inactive after the first error.
+ * - Reception error: error callback USART_XFER_ERROR_DMA_TRANSFER, RX inactive.
+ */
+void Ut_Usart_Dma_ErrorHandlers_ReportErrorAndStopTransfer( void )
+{
+    const struct
+    {
+        gpdma_ErrorMaskId_t DmaError;
+        usart_XferErrorId_t ErrorId;
+    }   errorLut[] =
+    {
+        { GPDMA_ERROR_TRANSFER,      USART_XFER_ERROR_DMA_TRANSFER        },
+        { GPDMA_ERROR_CONFIG_ERROR,  USART_XFER_ERROR_DMA_CONFIG          },
+        { GPDMA_ERROR_CONFIG_UPDATE, USART_XFER_ERROR_DMA_CONFIG_UPDATE   },
+        { GPDMA_ERROR_TRIG_OVERRUN,  USART_XFER_ERROR_DMA_TRIGGER_OVERRUN },
+    };
+    usart_DataConfig_t    dataConfig = Ut_Usart_Get_DmaDataConfig( USART_BUFFER_MODE_ONE_SHOT );
+    usart_FunctionState_t state      = USART_FUNCTION_ACTIVE;
+    uint32_t              txIdx      = 0u;
+    uint32_t              rxIdx      = 0u;
+
+    Ut_Usart_Setup_DmaMocks();
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+    txIdx = Ut_Usart_Find_DmaInit( dataConfig.TxDmaChannelId );
+    rxIdx = Ut_Usart_Find_DmaInit( dataConfig.RxDmaChannelId );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_TxStart( UT_USART_BUS, utUsart_TxBuf, 4u ) );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_RxStart( UT_USART_BUS ) );
+
+    for( uint32_t errIdx = 0u; ( sizeof( errorLut ) / sizeof( errorLut[ 0u ] ) ) > errIdx; errIdx++ )
+    {
+        utUsart_ErrorCnt  = 0u;
+        utUsart_LastError = USART_XFER_ERROR_CNT;
+
+        utUsart_DmaConfig[ txIdx ].ErrorIsr( errorLut[ errIdx ].DmaError );
+
+        TEST_ASSERT_EQUAL_UINT32( 1u, utUsart_ErrorCnt );
+        TEST_ASSERT_EQUAL( errorLut[ errIdx ].ErrorId, utUsart_LastError );
+    }
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Get_TxState( UT_USART_BUS, &state ) );
+    TEST_ASSERT_EQUAL( USART_FUNCTION_INACTIVE, state );
+
+    utUsart_ErrorCnt  = 0u;
+    utUsart_LastError = USART_XFER_ERROR_CNT;
+    utUsart_DmaConfig[ rxIdx ].ErrorIsr( GPDMA_ERROR_TRANSFER );
+
+    TEST_ASSERT_EQUAL_UINT32( 1u, utUsart_ErrorCnt );
+    TEST_ASSERT_EQUAL( USART_XFER_ERROR_DMA_TRANSFER, utUsart_LastError );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Get_RxState( UT_USART_BUS, &state ) );
+    TEST_ASSERT_EQUAL( USART_FUNCTION_INACTIVE, state );
+}
+
+
+/**
+ * \brief   Releasing the DMA transmission restarts the enabled peripheral (errata ES0561 2.11.2).
+ *
+ * \details Transmission started (DMAT set), stopped, peripheral enabled (UE), then the data
+ *          handling is reconfigured to interrupt mode.
+ *
+ * \par Expected results
+ * - GPDMA channel of the transmission disabled with its interrupt, CR3.DMAT cleared.
+ * - Peripheral enable bit UE set again (disabled and enabled after DMAT is cleared).
+ */
+void Ut_Usart_Dma_TxDeinit_DmatCleared_PeripheralRestarted( void )
+{
+    usart_DataConfig_t     dataConfig = Ut_Usart_Get_DmaDataConfig( USART_BUFFER_MODE_ONE_SHOT );
+    usart_DataConfig_t     isrConfig  = Ut_Usart_Get_DataConfig( USART_XFER_MODE_ISR, UT_USART_RX_SIZE );
+    utUsart_DmaChannel_t * txChannel  = NULL;
+
+    Ut_Usart_Setup_DmaMocks();
+    txChannel = Ut_Usart_Get_DmaChannel( (gpdma_PeriphId_t)dataConfig.TxDmaPeriphId, (gpdma_ChannelId_t)dataConfig.TxDmaChannelId );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_TxStart( UT_USART_BUS, utUsart_TxBuf, 4u ) );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_TxStop( UT_USART_BUS ) );
+    UT_USART_REG->CR1 |= USART_CR1_UE;
+    TEST_ASSERT_BITS_HIGH( USART_CR3_DMAT, UT_USART_REG->CR3 );
+
+    const uint32_t inactiveCnt = txChannel->InactiveCnt;
+    const uint32_t irqOffCnt   = txChannel->IrqOffCnt;
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_DataConfig( UT_USART_BUS, &isrConfig ) );
+
+    TEST_ASSERT_GREATER_THAN_UINT32( inactiveCnt, txChannel->InactiveCnt );
+    TEST_ASSERT_GREATER_THAN_UINT32( irqOffCnt, txChannel->IrqOffCnt );
+    TEST_ASSERT_BITS_LOW( USART_CR3_DMAT, UT_USART_REG->CR3 );
+    TEST_ASSERT_BITS_HIGH( USART_CR1_UE, UT_USART_REG->CR1 );
+}
+
 /* ========================== LOCAL FUNCTIONS =============================== */
 
 /**
@@ -1914,4 +2801,235 @@ static void Ut_Usart_ErrorCallback( usart_XferErrorId_t errorId )
 {
     utUsart_LastError = errorId;
     utUsart_ErrorCnt++;
+}
+
+
+/**
+ * \brief Prepares the GPDMA stubs and the NVIC mocks of a DMA test and clears the records.
+ */
+static void Ut_Usart_Setup_DmaMocks( void )
+{
+    (void)memset( utUsart_DmaConfig, 0, sizeof( utUsart_DmaConfig ) );
+    (void)memset( utUsart_DmaXferConfig, 0, sizeof( utUsart_DmaXferConfig ) );
+    (void)memset( utUsart_DmaChannel, 0, sizeof( utUsart_DmaChannel ) );
+
+    utUsart_DmaInitCnt     = 0u;
+    utUsart_DmaInitState   = GPDMA_REQUEST_OK;
+    utUsart_DmaActiveState = GPDMA_REQUEST_OK;
+    utUsart_DmaRemaining   = 0u;
+
+    Nvic_Set_PeriphIrq_Prio_IgnoreAndReturn( NVIC_REQUEST_OK );
+    Nvic_Set_PeriphIrq_Handler_StubWithCallback( Ut_Usart_NvicSetHandlerStub );
+    Nvic_Set_PeriphIrq_Active_IgnoreAndReturn( NVIC_REQUEST_OK );
+    Nvic_Set_PeriphIrq_Inactive_IgnoreAndReturn( NVIC_REQUEST_OK );
+
+    Gpdma_Get_DefaultConfig_IgnoreAndReturn( GPDMA_REQUEST_OK );
+    Gpdma_Init_StubWithCallback( Ut_Usart_DmaInitStub );
+    Gpdma_Set_ChannelActive_StubWithCallback( Ut_Usart_DmaActiveStub );
+    Gpdma_Set_ChannelInactive_StubWithCallback( Ut_Usart_DmaInactiveStub );
+    Gpdma_Set_InterruptActive_StubWithCallback( Ut_Usart_DmaIrqOnStub );
+    Gpdma_Set_InterruptInactive_StubWithCallback( Ut_Usart_DmaIrqOffStub );
+    Gpdma_Set_Priority_StubWithCallback( Ut_Usart_DmaPrioStub );
+    Gpdma_Set_HalfTransferIsrHandler_StubWithCallback( Ut_Usart_DmaHalfIsrStub );
+    Gpdma_Set_HalfTransferIrqActive_StubWithCallback( Ut_Usart_DmaHalfOnStub );
+    Gpdma_Set_HalfTransferIrqInactive_StubWithCallback( Ut_Usart_DmaHalfOffStub );
+    Gpdma_Set_BlockSize_StubWithCallback( Ut_Usart_DmaBlockSizeStub );
+    Gpdma_Set_SourceAddr_StubWithCallback( Ut_Usart_DmaSrcAddrStub );
+    Gpdma_Set_DestinationAddr_StubWithCallback( Ut_Usart_DmaDstAddrStub );
+    Gpdma_Get_BlockSize_StubWithCallback( Ut_Usart_DmaRemainingStub );
+}
+
+
+/**
+ * \brief Returns DMA data configuration of both directions. Every call selects other GPDMA
+ *        channels than the previous call (the module keeps its channel ownership).
+ *
+ * \param bufferMode [in]: Receive buffer mode
+ */
+static usart_DataConfig_t Ut_Usart_Get_DmaDataConfig( usart_BufferMode_t bufferMode )
+{
+    usart_DataConfig_t dataConfig = Ut_Usart_Get_DataConfig( USART_XFER_MODE_DMA, UT_USART_RX_SIZE );
+
+    dataConfig.RxBufferMode   = bufferMode;
+    dataConfig.TxDmaChannelId = (usart_DmaChannelId_t)( utUsart_DmaChannelSel % (uint32_t)USART_DMA_CHANNEL_CNT );
+    dataConfig.RxDmaChannelId = (usart_DmaChannelId_t)( ( utUsart_DmaChannelSel + 1u ) % (uint32_t)USART_DMA_CHANNEL_CNT );
+
+    utUsart_DmaChannelSel++;
+
+    return ( dataConfig );
+}
+
+
+/**
+ * \brief Returns index of the Gpdma_Init() record of the GPDMA channel.
+ *
+ * \param channelId [in]: GPDMA channel
+ */
+static uint32_t Ut_Usart_Find_DmaInit( usart_DmaChannelId_t channelId )
+{
+    uint32_t foundIdx = UT_USART_DMA_CFG_CNT;
+
+    for( uint32_t cfgIdx = 0u; ( UT_USART_DMA_CFG_CNT > cfgIdx ) && ( UT_USART_DMA_CFG_CNT == foundIdx ); cfgIdx++ )
+    {
+        if( ( cfgIdx < utUsart_DmaInitCnt ) && ( (gpdma_ChannelId_t)channelId == utUsart_DmaConfig[ cfgIdx ].ChannelId ) )
+        {
+            foundIdx = cfgIdx;
+        }
+        else
+        {
+            /* Other channel */
+        }
+    }
+
+    TEST_ASSERT_LESS_THAN_UINT32_MESSAGE( UT_USART_DMA_CFG_CNT, foundIdx, "GPDMA channel was not initialized" );
+
+    return ( foundIdx );
+}
+
+
+/** \brief Returns record of the GPDMA channel calls */
+static utUsart_DmaChannel_t * Ut_Usart_Get_DmaChannel( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel )
+{
+    TEST_ASSERT_LESS_THAN_UINT32( GPDMA_PERIPH_CNT, (uint32_t)dmaBus );
+    TEST_ASSERT_LESS_THAN_UINT32( UT_USART_DMA_CHANNELS, (uint32_t)dmaChannel );
+
+    return ( &utUsart_DmaChannel[ dmaBus ][ dmaChannel ] );
+}
+
+
+/** \brief Gpdma_Init() stub - stores the configuration */
+static gpdma_RequestState_t Ut_Usart_DmaInitStub( gpdma_ConfigStruct_t * const configStruct, int callCnt )
+{
+    (void)callCnt;
+
+    TEST_ASSERT_NOT_NULL( configStruct );
+    TEST_ASSERT_NOT_NULL( configStruct->TransferConfig );
+
+    if( UT_USART_DMA_CFG_CNT > utUsart_DmaInitCnt )
+    {
+        utUsart_DmaConfig[ utUsart_DmaInitCnt ]     = *configStruct;
+        utUsart_DmaXferConfig[ utUsart_DmaInitCnt ] = *configStruct->TransferConfig;
+    }
+    else
+    {
+        /* Record buffer full */
+    }
+
+    utUsart_DmaInitCnt++;
+
+    return ( utUsart_DmaInitState );
+}
+
+
+/** \brief Gpdma_Set_ChannelActive() stub - returns \ref utUsart_DmaActiveState */
+static gpdma_RequestState_t Ut_Usart_DmaActiveStub( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, int callCnt )
+{
+    (void)callCnt;
+    Ut_Usart_Get_DmaChannel( dmaBus, dmaChannel )->ActiveCnt++;
+    return ( utUsart_DmaActiveState );
+}
+
+
+/** \brief Gpdma_Set_ChannelInactive() stub */
+static gpdma_RequestState_t Ut_Usart_DmaInactiveStub( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, int callCnt )
+{
+    (void)callCnt;
+    Ut_Usart_Get_DmaChannel( dmaBus, dmaChannel )->InactiveCnt++;
+    return ( GPDMA_REQUEST_OK );
+}
+
+
+/** \brief Gpdma_Set_InterruptActive() stub */
+static gpdma_RequestState_t Ut_Usart_DmaIrqOnStub( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, int callCnt )
+{
+    (void)callCnt;
+    Ut_Usart_Get_DmaChannel( dmaBus, dmaChannel )->IrqOnCnt++;
+    return ( GPDMA_REQUEST_OK );
+}
+
+
+/** \brief Gpdma_Set_InterruptInactive() stub */
+static gpdma_RequestState_t Ut_Usart_DmaIrqOffStub( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, int callCnt )
+{
+    (void)callCnt;
+    Ut_Usart_Get_DmaChannel( dmaBus, dmaChannel )->IrqOffCnt++;
+    return ( GPDMA_REQUEST_OK );
+}
+
+
+/** \brief Gpdma_Set_Priority() stub */
+static gpdma_RequestState_t Ut_Usart_DmaPrioStub( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, gpdma_Priority_t channelPrio, int callCnt )
+{
+    utUsart_DmaChannel_t * const channel = Ut_Usart_Get_DmaChannel( dmaBus, dmaChannel );
+
+    (void)callCnt;
+    channel->PrioCnt++;
+    channel->Prio = channelPrio;
+    return ( GPDMA_REQUEST_OK );
+}
+
+
+/** \brief Gpdma_Set_HalfTransferIsrHandler() stub */
+static gpdma_RequestState_t Ut_Usart_DmaHalfIsrStub( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, gpdma_IsrCallback * const irqHandler, int callCnt )
+{
+    (void)callCnt;
+    (void)irqHandler;
+    Ut_Usart_Get_DmaChannel( dmaBus, dmaChannel )->HalfIsrCnt++;
+    return ( GPDMA_REQUEST_OK );
+}
+
+
+/** \brief Gpdma_Set_HalfTransferIrqActive() stub */
+static gpdma_RequestState_t Ut_Usart_DmaHalfOnStub( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, int callCnt )
+{
+    (void)callCnt;
+    Ut_Usart_Get_DmaChannel( dmaBus, dmaChannel )->HalfOnCnt++;
+    return ( GPDMA_REQUEST_OK );
+}
+
+
+/** \brief Gpdma_Set_HalfTransferIrqInactive() stub */
+static gpdma_RequestState_t Ut_Usart_DmaHalfOffStub( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, int callCnt )
+{
+    (void)callCnt;
+    Ut_Usart_Get_DmaChannel( dmaBus, dmaChannel )->HalfOffCnt++;
+    return ( GPDMA_REQUEST_OK );
+}
+
+
+/** \brief Gpdma_Set_BlockSize() stub */
+static gpdma_RequestState_t Ut_Usart_DmaBlockSizeStub( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, gpdma_BlockSize_t blockSize, int callCnt )
+{
+    (void)callCnt;
+    Ut_Usart_Get_DmaChannel( dmaBus, dmaChannel )->BlockSize = blockSize;
+    return ( GPDMA_REQUEST_OK );
+}
+
+
+/** \brief Gpdma_Set_SourceAddr() stub */
+static gpdma_RequestState_t Ut_Usart_DmaSrcAddrStub( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, gpdma_SrcAddr_t sourceAddr, int callCnt )
+{
+    (void)callCnt;
+    Ut_Usart_Get_DmaChannel( dmaBus, dmaChannel )->SrcAddr = sourceAddr;
+    return ( GPDMA_REQUEST_OK );
+}
+
+
+/** \brief Gpdma_Set_DestinationAddr() stub */
+static gpdma_RequestState_t Ut_Usart_DmaDstAddrStub( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, gpdma_DstAddr_t destAddr, int callCnt )
+{
+    (void)callCnt;
+    Ut_Usart_Get_DmaChannel( dmaBus, dmaChannel )->DstAddr = destAddr;
+    return ( GPDMA_REQUEST_OK );
+}
+
+
+/** \brief Gpdma_Get_BlockSize() stub - returns \ref utUsart_DmaRemaining */
+static gpdma_RequestState_t Ut_Usart_DmaRemainingStub( gpdma_PeriphId_t dmaBus, gpdma_ChannelId_t dmaChannel, gpdma_BlockSize_t * const blockSize, int callCnt )
+{
+    (void)callCnt;
+    (void)dmaBus;
+    (void)dmaChannel;
+    *blockSize = utUsart_DmaRemaining;
+    return ( GPDMA_REQUEST_OK );
 }

@@ -302,6 +302,28 @@ usart_RequestState_t Usart_Init( usart_BusConfig_t * const usartConfig )
             /* DE pin configuration is not used or initialization failed */
         }
 
+        if( ( USART_REQUEST_ERROR                                    != retState               ) &&
+            ( USART_BIT_MASK_DECODE_PERIPH( usartConfig->BusCtsPin ) == usartConfig->PeriphId  ) &&
+            ( USART_CTS_PIN_UNUSED                                   != usartConfig->BusCtsPin )    )
+        {
+            retState = Usart_InitCtsGpio( usartConfig->BusCtsPin );
+        }
+        else
+        {
+            /* CTS pin configuration is not used or initialization failed */
+        }
+
+        if( ( USART_REQUEST_ERROR                                    != retState               ) &&
+            ( USART_BIT_MASK_DECODE_PERIPH( usartConfig->BusRtsPin ) == usartConfig->PeriphId  ) &&
+            ( USART_RTS_PIN_UNUSED                                   != usartConfig->BusRtsPin )    )
+        {
+            retState = Usart_InitRtsGpio( usartConfig->BusRtsPin );
+        }
+        else
+        {
+            /* RTS pin configuration is not used or initialization failed */
+        }
+
         /*------------ USART peripheral initialization section ---------------*/
 
         if( USART_REQUEST_ERROR != retState )
@@ -534,6 +556,8 @@ usart_RequestState_t Usart_Get_DefaultConfig( usart_BusConfig_t* usartConfig )
         usartConfig->BusRxPin             = USART_RX_PIN_UNUSED;
         usartConfig->BusTxPin             = USART_TX_PIN_UNUSED;
         usartConfig->BusDePin             = USART_DE_PIN_UNUSED;
+        usartConfig->BusCtsPin            = USART_CTS_PIN_UNUSED;
+        usartConfig->BusRtsPin            = USART_RTS_PIN_UNUSED;
 
         returnState = USART_REQUEST_OK;
     }
@@ -3848,6 +3872,80 @@ usart_RequestState_t Usart_InitTxGpio( usart_TxPin_t pinId )
  *         otherwise return error.
  */
 usart_RequestState_t Usart_InitDeGpio( usart_DePin_t pinId )
+{
+    usart_RequestState_t retValue      = USART_REQUEST_ERROR;
+    gpio_RequestState_t  gpioInitState = GPIO_REQUEST_ERROR;
+    gpio_Config_t        pinConfig     = { 0u };
+
+    pinConfig.PortId         = USART_BIT_MASK_DECODE_PORT( pinId );
+    pinConfig.PinId          = USART_BIT_MASK_DECODE_PIN( pinId );
+    pinConfig.PinMode        = GPIO_PIN_MODE_ALTERNATE;
+    pinConfig.PinPull        = GPIO_PIN_PULL_NONE;
+    pinConfig.PinSpeed       = GPIO_PIN_SPEED_MEDIUM;
+    pinConfig.PinOutType     = GPIO_PIN_OUTPUT_PUSHPULL;
+    pinConfig.PinAltFunction = USART_BIT_MASK_DECODE_AF( pinId );
+
+    /* Initialize GPIO */
+    gpioInitState = Gpio_Init( &pinConfig );
+
+    if( GPIO_REQUEST_ERROR != gpioInitState )
+    {
+        retValue = USART_REQUEST_OK;
+    }
+    else
+    {
+        retValue = USART_REQUEST_ERROR;
+    }
+
+    return ( retValue );
+}
+
+
+/**
+ * \brief Initializes GPIO Clear To Send (CTS) pin used by peripheral
+ *
+ * \param pinId [in]: Pin identification
+ * \return State of request execution. Returns "OK" if request was success,
+ *         otherwise return error.
+ */
+usart_RequestState_t Usart_InitCtsGpio( usart_CtsPin_t pinId )
+{
+    usart_RequestState_t retValue      = USART_REQUEST_ERROR;
+    gpio_RequestState_t  gpioInitState = GPIO_REQUEST_ERROR;
+    gpio_Config_t        pinConfig     = { 0u };
+
+    pinConfig.PortId         = USART_BIT_MASK_DECODE_PORT( pinId );
+    pinConfig.PinId          = USART_BIT_MASK_DECODE_PIN( pinId );
+    pinConfig.PinMode        = GPIO_PIN_MODE_ALTERNATE;
+    pinConfig.PinPull        = GPIO_PIN_PULL_NONE;
+    pinConfig.PinSpeed       = GPIO_PIN_SPEED_MEDIUM;
+    pinConfig.PinOutType     = GPIO_PIN_OUTPUT_PUSHPULL;
+    pinConfig.PinAltFunction = USART_BIT_MASK_DECODE_AF( pinId );
+
+    /* Initialize GPIO */
+    gpioInitState = Gpio_Init( &pinConfig );
+
+    if( GPIO_REQUEST_ERROR != gpioInitState )
+    {
+        retValue = USART_REQUEST_OK;
+    }
+    else
+    {
+        retValue = USART_REQUEST_ERROR;
+    }
+
+    return ( retValue );
+}
+
+
+/**
+ * \brief Initializes GPIO Request To Send (RTS) pin used by peripheral
+ *
+ * \param pinId [in]: Pin identification
+ * \return State of request execution. Returns "OK" if request was success,
+ *         otherwise return error.
+ */
+usart_RequestState_t Usart_InitRtsGpio( usart_RtsPin_t pinId )
 {
     usart_RequestState_t retValue      = USART_REQUEST_ERROR;
     gpio_RequestState_t  gpioInitState = GPIO_REQUEST_ERROR;

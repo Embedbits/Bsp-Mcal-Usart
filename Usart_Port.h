@@ -147,6 +147,8 @@ usart_RequestState_t    Usart_Get_ErrorIrqState         ( usart_PeriphId_t usart
 usart_RequestState_t    Usart_InitRxGpio                ( usart_RxPin_t pinId );
 usart_RequestState_t    Usart_InitTxGpio                ( usart_TxPin_t pinId );
 usart_RequestState_t    Usart_InitDeGpio                ( usart_DePin_t pinId );
+usart_RequestState_t    Usart_InitCtsGpio               ( usart_CtsPin_t pinId );
+usart_RequestState_t    Usart_InitRtsGpio               ( usart_RtsPin_t pinId );
 
 #ifdef __cplusplus
 }

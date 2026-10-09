@@ -226,258 +226,187 @@ typedef enum
 /** \brief List of RX pins available for USART/UART peripherals */
 typedef enum
 {
-#ifdef USART1
-#ifdef GPIOA
 #if defined(STM32H503xx)
     USART_RX_PIN_BUS1_PA1   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_8   ), /**< USART1 RX pin connected to PA1   */
 #endif
     USART_RX_PIN_BUS1_PA10  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_7   ), /**< USART1 RX pin connected to PA10  */
 #if defined(STM32H503xx)
     USART_RX_PIN_BUS1_PA11  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_8   ), /**< USART1 RX pin connected to PA11  */
-#endif
-#if defined(STM32H503xx)
     USART_RX_PIN_BUS1_PA13  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_13  , GPIO_ALT_FUNC_7   ), /**< USART1 RX pin connected to PA13  */
 #endif
-#endif
-#ifdef GPIOB
     USART_RX_PIN_BUS1_PB7   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_B   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_7   ), /**< USART1 RX pin connected to PB7   */
     USART_RX_PIN_BUS1_PB15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_B   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_4   ), /**< USART1 RX pin connected to PB15  */
-#endif
-#ifdef GPIOK
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
     USART_RX_PIN_BUS1_PK2   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_K   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_7   ), /**< USART1 RX pin connected to PK2   */
 #endif
-#endif
 
-#ifdef USART2
-#ifdef GPIOA
     USART_RX_PIN_BUS2_PA3   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART2 RX pin connected to PA3   */
 #if defined(STM32H503xx)
     USART_RX_PIN_BUS2_PA11  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_4   ), /**< USART2 RX pin connected to PA11  */
-#endif
-#if defined(STM32H503xx)
     USART_RX_PIN_BUS2_PA13  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_13  , GPIO_ALT_FUNC_9   ), /**< USART2 RX pin connected to PA13  */
-#endif
-#if defined(STM32H503xx)
     USART_RX_PIN_BUS2_PA15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_9   ), /**< USART2 RX pin connected to PA15  */
-#endif
-#endif
-#ifdef GPIOB
-#if defined(STM32H503xx)
     USART_RX_PIN_BUS2_PB1   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_B   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_9   ), /**< USART2 RX pin connected to PB1   */
-#endif
-#if defined(STM32H503xx)
     USART_RX_PIN_BUS2_PB5   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_B   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_13  ), /**< USART2 RX pin connected to PB5   */
-#endif
-#if defined(STM32H503xx)
     USART_RX_PIN_BUS2_PB15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_B   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_13  ), /**< USART2 RX pin connected to PB15  */
-#endif
-#endif
-#ifdef GPIOC
-#if defined(STM32H503xx)
     USART_RX_PIN_BUS2_PC7   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_C   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_13  ), /**< USART2 RX pin connected to PC7   */
 #endif
-#endif
-#ifdef GPIOD
 #if !defined(STM32H503xx)
     USART_RX_PIN_BUS2_PD6   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_D   , GPIO_PIN_ID_6   , GPIO_ALT_FUNC_7   ), /**< USART2 RX pin connected to PD6   */
 #endif
-#endif
-#ifdef GPIOE
-#if defined(STM32H5E4xx) || defined(STM32H5E5xx) || defined(STM32H5F4xx) || defined(STM32H5F5xx)
+#if defined(STM32H5E4xx) || \
+    defined(STM32H5E5xx) || \
+    defined(STM32H5F4xx) || \
+    defined(STM32H5F5xx)
     USART_RX_PIN_BUS2_PE7   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_E   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_5   ), /**< USART2 RX pin connected to PE7   */
 #endif
-#endif
-#endif
 
-#ifdef USART3
-#ifdef GPIOA
 #if defined(STM32H503xx)
     USART_RX_PIN_BUS3_PA3   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_A   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_13  ), /**< USART3 RX pin connected to PA3   */
-#endif
-#if defined(STM32H503xx)
     USART_RX_PIN_BUS3_PA5   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_A   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_13  ), /**< USART3 RX pin connected to PA5   */
-#endif
-#if defined(STM32H503xx)
     USART_RX_PIN_BUS3_PA12  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_A   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_13  ), /**< USART3 RX pin connected to PA12  */
-#endif
-#if defined(STM32H503xx)
     USART_RX_PIN_BUS3_PA15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_A   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_13  ), /**< USART3 RX pin connected to PA15  */
 #endif
-#endif
-#ifdef GPIOB
-#if defined(STM32H523xx) || defined(STM32H533xx) || defined(STM32H543xx) || defined(STM32H553xx)
+#if defined(STM32H523xx) || \
+    defined(STM32H533xx) || \
+    defined(STM32H543xx) || \
+    defined(STM32H553xx)
     USART_RX_PIN_BUS3_PB1   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_7   ), /**< USART3 RX pin connected to PB1   */
 #endif
 #if defined(STM32H503xx)
     USART_RX_PIN_BUS3_PB8   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_13  ), /**< USART3 RX pin connected to PB8   */
 #endif
-#if !defined(STM32H503xx) && !defined(STM32H523xx) && !defined(STM32H533xx) && !defined(STM32H543xx) && !defined(STM32H553xx)
+#if !defined(STM32H503xx) && \
+    !defined(STM32H523xx) && \
+    !defined(STM32H533xx) && \
+    !defined(STM32H543xx) && \
+    !defined(STM32H553xx)
     USART_RX_PIN_BUS3_PB11  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_7   ), /**< USART3 RX pin connected to PB11  */
 #endif
-#endif
-#ifdef GPIOC
     USART_RX_PIN_BUS3_PC4   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_C   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART3 RX pin connected to PC4   */
     USART_RX_PIN_BUS3_PC11  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_C   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_7   ), /**< USART3 RX pin connected to PC11  */
-#endif
-#ifdef GPIOD
 #if !defined(STM32H503xx)
     USART_RX_PIN_BUS3_PD9   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_D   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_7   ), /**< USART3 RX pin connected to PD9   */
 #endif
-#endif
-#ifdef GPIOJ
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
     USART_RX_PIN_BUS3_PJ2   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_J   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_7   ), /**< USART3 RX pin connected to PJ2   */
 #endif
-#endif
 
-#ifdef UART4
-#ifdef GPIOA
+#if defined(UART4)
     USART_RX_PIN_BUS4_PA1   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_A   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_8   ), /**< UART4 RX pin connected to PA1    */
     USART_RX_PIN_BUS4_PA11  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_A   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_6   ), /**< UART4 RX pin connected to PA11   */
-#endif
-#ifdef GPIOB
     USART_RX_PIN_BUS4_PB8   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_B   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_8   ), /**< UART4 RX pin connected to PB8    */
-#endif
-#ifdef GPIOC
     USART_RX_PIN_BUS4_PC11  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_C   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_8   ), /**< UART4 RX pin connected to PC11   */
-#endif
-#ifdef GPIOD
     USART_RX_PIN_BUS4_PD0   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_D   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_8   ), /**< UART4 RX pin connected to PD0    */
     USART_RX_PIN_BUS4_PD11  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_D   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_8   ), /**< UART4 RX pin connected to PD11   */
-#endif
-#ifdef GPIOH
-#if !defined(STM32H523xx) && !defined(STM32H533xx) && !defined(STM32H543xx) && !defined(STM32H553xx)
+#if !defined(STM32H523xx) && \
+    !defined(STM32H533xx) && \
+    !defined(STM32H543xx) && \
+    !defined(STM32H553xx)
     USART_RX_PIN_BUS4_PH14  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_H   , GPIO_PIN_ID_14  , GPIO_ALT_FUNC_8   ), /**< UART4 RX pin connected to PH14   */
-#endif
-#endif
-#ifdef GPIOI
     USART_RX_PIN_BUS4_PI9   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_I   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_8   ), /**< UART4 RX pin connected to PI9    */
 #endif
-#endif
+#endif /* UART4 */
 
-#ifdef UART5
-#ifdef GPIOB
+#if defined(UART5)
     USART_RX_PIN_BUS5_PB5   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_B   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_14  ), /**< UART5 RX pin connected to PB5    */
     USART_RX_PIN_BUS5_PB12  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_B   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_14  ), /**< UART5 RX pin connected to PB12   */
     USART_RX_PIN_BUS5_PB15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_B   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_14  ), /**< UART5 RX pin connected to PB15   */
-#endif
-#ifdef GPIOD
     USART_RX_PIN_BUS5_PD2   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_D   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_8   ), /**< UART5 RX pin connected to PD2    */
-#endif
-#ifdef GPIOJ
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
     USART_RX_PIN_BUS5_PJ10  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_J   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_8   ), /**< UART5 RX pin connected to PJ10   */
 #endif
-#endif
+#endif /* UART5 */
 
-#ifdef USART6
-#ifdef GPIOB
-#if defined(STM32H523xx) || defined(STM32H533xx) || defined(STM32H543xx) || defined(STM32H553xx)
+#if defined(USART6)
+#if defined(STM32H523xx) || \
+    defined(STM32H533xx) || \
+    defined(STM32H543xx) || \
+    defined(STM32H553xx)
     USART_RX_PIN_BUS6_PB6   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_B   , GPIO_PIN_ID_6   , GPIO_ALT_FUNC_6   ), /**< USART6 RX pin connected to PB6   */
 #endif
-#endif
-#ifdef GPIOC
     USART_RX_PIN_BUS6_PC7   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_C   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_7   ), /**< USART6 RX pin connected to PC7   */
-#endif
-#ifdef GPIOE
-#if defined(STM32H5E4xx) || defined(STM32H5E5xx) || defined(STM32H5F4xx) || defined(STM32H5F5xx)
+#if defined(STM32H5E4xx) || \
+    defined(STM32H5E5xx) || \
+    defined(STM32H5F4xx) || \
+    defined(STM32H5F5xx)
     USART_RX_PIN_BUS6_PE12  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_E   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_7   ), /**< USART6 RX pin connected to PE12  */
 #endif
-#endif
-#ifdef GPIOG
     USART_RX_PIN_BUS6_PG9   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_G   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_7   ), /**< USART6 RX pin connected to PG9   */
-#endif
-#ifdef GPIOK
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
     USART_RX_PIN_BUS6_PK14  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_K   , GPIO_PIN_ID_14  , GPIO_ALT_FUNC_7   ), /**< USART6 RX pin connected to PK14  */
 #endif
-#endif
+#endif /* USART6 */
 
-#ifdef UART7
-#ifdef GPIOA
+#if defined(UART7)
     USART_RX_PIN_BUS7_PA8   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_7   , GPIO_PORT_A   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_11  ), /**< UART7 RX pin connected to PA8    */
-#endif
-#ifdef GPIOB
     USART_RX_PIN_BUS7_PB3   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_7   , GPIO_PORT_B   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_11  ), /**< UART7 RX pin connected to PB3    */
-#endif
-#ifdef GPIOE
     USART_RX_PIN_BUS7_PE7   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_7   , GPIO_PORT_E   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_7   ), /**< UART7 RX pin connected to PE7    */
-#endif
-#ifdef GPIOF
     USART_RX_PIN_BUS7_PF6   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_7   , GPIO_PORT_F   , GPIO_PIN_ID_6   , GPIO_ALT_FUNC_7   ), /**< UART7 RX pin connected to PF6    */
-#endif
-#ifdef GPIOG
-#if defined(STM32H5E4xx) || defined(STM32H5E5xx) || defined(STM32H5F4xx) || defined(STM32H5F5xx)
+#if defined(STM32H5E4xx) || \
+    defined(STM32H5E5xx) || \
+    defined(STM32H5F4xx) || \
+    defined(STM32H5F5xx)
     USART_RX_PIN_BUS7_PG3   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_7   , GPIO_PORT_G   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_11  ), /**< UART7 RX pin connected to PG3    */
 #endif
-#endif
-#endif
+#endif /* UART7 */
 
-#ifdef UART8
-#ifdef GPIOD
-#if defined(STM32H5E4xx) || defined(STM32H5E5xx) || defined(STM32H5F4xx) || defined(STM32H5F5xx)
+#if defined(UART8)
+#if defined(STM32H5E4xx) || \
+    defined(STM32H5E5xx) || \
+    defined(STM32H5F4xx) || \
+    defined(STM32H5F5xx)
     USART_RX_PIN_BUS8_PD5   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_8   , GPIO_PORT_D   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_8   ), /**< UART8 RX pin connected to PD5    */
 #endif
-#endif
-#ifdef GPIOE
     USART_RX_PIN_BUS8_PE0   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_8   , GPIO_PORT_E   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_8   ), /**< UART8 RX pin connected to PE0    */
-#if defined(STM32H543xx) || defined(STM32H553xx)
+#if defined(STM32H543xx) || \
+    defined(STM32H553xx)
     USART_RX_PIN_BUS8_PE5   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_8   , GPIO_PORT_E   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_13  ), /**< UART8 RX pin connected to PE5    */
 #endif
-#endif
-#endif
+#endif /* UART8 */
 
-#ifdef UART9
-#ifdef GPIOD
+#if defined(UART9)
     USART_RX_PIN_BUS9_PD14  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_9   , GPIO_PORT_D   , GPIO_PIN_ID_14  , GPIO_ALT_FUNC_11  ), /**< UART9 RX pin connected to PD14   */
-#endif
-#ifdef GPIOF
-#if !defined(STM32H562xx) && !defined(STM32H563xx) && !defined(STM32H573xx)
+#if !defined(STM32H562xx) && \
+    !defined(STM32H563xx) && \
+    !defined(STM32H573xx)
     USART_RX_PIN_BUS9_PF0   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_9   , GPIO_PORT_F   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_11  ), /**< UART9 RX pin connected to PF0    */
 #endif
-#endif
-#ifdef GPIOG
     USART_RX_PIN_BUS9_PG0   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_9   , GPIO_PORT_G   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_11  ), /**< UART9 RX pin connected to PG0    */
-#endif
-#endif
+#endif /* UART9 */
 
-#ifdef USART10
-#ifdef GPIOE
+#if defined(USART10)
     USART_RX_PIN_BUS10_PE2  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_10  , GPIO_PORT_E   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_7   ), /**< USART10 RX pin connected to PE2  */
-#endif
-#ifdef GPIOG
-#if !defined(STM32H562xx) && !defined(STM32H563xx) && !defined(STM32H573xx)
+#if !defined(STM32H562xx) && \
+    !defined(STM32H563xx) && \
+    !defined(STM32H573xx)
     USART_RX_PIN_BUS10_PG9  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_10  , GPIO_PORT_G   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_6   ), /**< USART10 RX pin connected to PG9  */
 #endif
     USART_RX_PIN_BUS10_PG11 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_10  , GPIO_PORT_G   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_6   ), /**< USART10 RX pin connected to PG11 */
-#endif
-#ifdef GPIOJ
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
     USART_RX_PIN_BUS10_PJ5  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_10  , GPIO_PORT_J   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_6   ), /**< USART10 RX pin connected to PJ5  */
 #endif
-#endif
+#endif /* USART10 */
 
-#ifdef USART11
-#ifdef GPIOA
+#if defined(USART11)
     USART_RX_PIN_BUS11_PA7  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_11  , GPIO_PORT_A   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_7   ), /**< USART11 RX pin connected to PA7  */
-#endif
-#ifdef GPIOF
     USART_RX_PIN_BUS11_PF4  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_11  , GPIO_PORT_F   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART11 RX pin connected to PF4  */
-#endif
-#ifdef GPIOI
-#if !defined(STM32H562xx) && !defined(STM32H563xx) && !defined(STM32H573xx)
+#if !defined(STM32H562xx) && \
+    !defined(STM32H563xx) && \
+    !defined(STM32H573xx)
     USART_RX_PIN_BUS11_PI10 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_11  , GPIO_PORT_I   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_7   ), /**< USART11 RX pin connected to PI10 */
 #endif
-#endif
-#endif
+#endif /* USART11 */
 
-#ifdef UART12
-#ifdef GPIOE
+#if defined(UART12)
     USART_RX_PIN_BUS12_PE9  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_12  , GPIO_PORT_E   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_6   ), /**< UART12 RX pin connected to PE9   */
-#endif
-#ifdef GPIOF
     USART_RX_PIN_BUS12_PF5  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_12  , GPIO_PORT_F   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_6   ), /**< UART12 RX pin connected to PF5   */
-#endif
-#ifdef GPIOG
     USART_RX_PIN_BUS12_PG2  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_12  , GPIO_PORT_G   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_7   ), /**< UART12 RX pin connected to PG2   */
-#endif
-#endif
+#endif /* UART12 */
 
     USART_RX_PIN_UNUSED     = USART_PIN_BIT_MASK_ENCODE( USART_BUS_CNT , GPIO_PORT_CNT , GPIO_PIN_ID_CNT , GPIO_ALT_FUNC_CNT ), /**< Identification of unused pin    */
 }   usart_RxPin_t;
@@ -486,416 +415,522 @@ typedef enum
 /** \brief List of TX pins available for USART/UART peripherals */
 typedef enum
 {
-#ifdef USART1
-#ifdef GPIOA
 #if defined(STM32H503xx)
     USART_TX_PIN_BUS1_PA2   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_8   ), /**< USART1 TX pin connected to PA2   */
 #endif
     USART_TX_PIN_BUS1_PA9   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_7   ), /**< USART1 TX pin connected to PA9   */
 #if defined(STM32H503xx)
     USART_TX_PIN_BUS1_PA12  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_8   ), /**< USART1 TX pin connected to PA12  */
-#endif
-#if defined(STM32H503xx)
     USART_TX_PIN_BUS1_PA14  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_14  , GPIO_ALT_FUNC_7   ), /**< USART1 TX pin connected to PA14  */
 #endif
-#if defined(STM32H523xx) || defined(STM32H533xx) || defined(STM32H543xx) || defined(STM32H553xx)
+#if defined(STM32H523xx) || \
+    defined(STM32H533xx) || \
+    defined(STM32H543xx) || \
+    defined(STM32H553xx)
     USART_TX_PIN_BUS1_PA15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_7   ), /**< USART1 TX pin connected to PA15  */
 #endif
-#endif
-#ifdef GPIOB
     USART_TX_PIN_BUS1_PB6   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_B   , GPIO_PIN_ID_6   , GPIO_ALT_FUNC_7   ), /**< USART1 TX pin connected to PB6   */
     USART_TX_PIN_BUS1_PB14  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_B   , GPIO_PIN_ID_14  , GPIO_ALT_FUNC_4   ), /**< USART1 TX pin connected to PB14  */
-#endif
-#ifdef GPIOK
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
     USART_TX_PIN_BUS1_PK1   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_K   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_7   ), /**< USART1 TX pin connected to PK1   */
 #endif
-#endif
 
-#ifdef USART2
-#ifdef GPIOA
     USART_TX_PIN_BUS2_PA2   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_7   ), /**< USART2 TX pin connected to PA2   */
 #if defined(STM32H503xx)
     USART_TX_PIN_BUS2_PA5   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_9   ), /**< USART2 TX pin connected to PA5   */
-#endif
-#if defined(STM32H503xx)
     USART_TX_PIN_BUS2_PA8   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_4   ), /**< USART2 TX pin connected to PA8   */
-#endif
-#if defined(STM32H503xx)
     USART_TX_PIN_BUS2_PA12  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_4   ), /**< USART2 TX pin connected to PA12  */
-#endif
-#if defined(STM32H503xx)
     USART_TX_PIN_BUS2_PA14  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_14  , GPIO_ALT_FUNC_9   ), /**< USART2 TX pin connected to PA14  */
 #endif
-#endif
-#ifdef GPIOB
-#if defined(STM32H503xx)
-    USART_TX_PIN_BUS2_PB0   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_B   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_9   ), /**< USART2 TX pin connected to PB0   */
-#elif defined(STM32H523xx) || defined(STM32H533xx) || defined(STM32H543xx) || defined(STM32H553xx)
+#if defined(STM32H523xx) || \
+    defined(STM32H533xx) || \
+    defined(STM32H543xx) || \
+    defined(STM32H553xx)
     USART_TX_PIN_BUS2_PB0   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_B   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_7   ), /**< USART2 TX pin connected to PB0   */
 #endif
 #if defined(STM32H503xx)
+    USART_TX_PIN_BUS2_PB0   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_B   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_9   ), /**< USART2 TX pin connected to PB0   */
     USART_TX_PIN_BUS2_PB4   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_B   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_13  ), /**< USART2 TX pin connected to PB4   */
-#endif
-#endif
-#ifdef GPIOC
-#if defined(STM32H503xx)
     USART_TX_PIN_BUS2_PC6   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_C   , GPIO_PIN_ID_6   , GPIO_ALT_FUNC_13  ), /**< USART2 TX pin connected to PC6   */
 #endif
-#endif
-#ifdef GPIOD
 #if !defined(STM32H503xx)
     USART_TX_PIN_BUS2_PD5   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_D   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_7   ), /**< USART2 TX pin connected to PD5   */
 #endif
-#endif
-#ifdef GPIOE
-#if defined(STM32H5E4xx) || defined(STM32H5E5xx) || defined(STM32H5F4xx) || defined(STM32H5F5xx)
+#if defined(STM32H5E4xx) || \
+    defined(STM32H5E5xx) || \
+    defined(STM32H5F4xx) || \
+    defined(STM32H5F5xx)
     USART_TX_PIN_BUS2_PE8   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_E   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_5   ), /**< USART2 TX pin connected to PE8   */
 #endif
-#endif
-#endif
 
-#ifdef USART3
-#ifdef GPIOA
 #if defined(STM32H503xx)
     USART_TX_PIN_BUS3_PA4   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_A   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_13  ), /**< USART3 TX pin connected to PA4   */
-#endif
-#if defined(STM32H503xx)
     USART_TX_PIN_BUS3_PA8   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_A   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_13  ), /**< USART3 TX pin connected to PA8   */
-#endif
-#endif
-#ifdef GPIOB
-#if defined(STM32H503xx)
     USART_TX_PIN_BUS3_PB3   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_13  ), /**< USART3 TX pin connected to PB3   */
-#endif
-#if defined(STM32H503xx)
     USART_TX_PIN_BUS3_PB7   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_13  ), /**< USART3 TX pin connected to PB7   */
 #endif
     USART_TX_PIN_BUS3_PB10  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_7   ), /**< USART3 TX pin connected to PB10  */
-#endif
-#ifdef GPIOC
     USART_TX_PIN_BUS3_PC10  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_C   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_7   ), /**< USART3 TX pin connected to PC10  */
-#endif
-#ifdef GPIOD
 #if !defined(STM32H503xx)
     USART_TX_PIN_BUS3_PD8   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_D   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_7   ), /**< USART3 TX pin connected to PD8   */
 #endif
-#endif
-#ifdef GPIOJ
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
     USART_TX_PIN_BUS3_PJ1   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_J   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_7   ), /**< USART3 TX pin connected to PJ1   */
 #endif
-#endif
 
-#ifdef UART4
-#ifdef GPIOA
+#if defined(UART4)
     USART_TX_PIN_BUS4_PA0   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_A   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_8   ), /**< UART4 TX pin connected to PA0    */
     USART_TX_PIN_BUS4_PA12  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_A   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_6   ), /**< UART4 TX pin connected to PA12   */
-#endif
-#ifdef GPIOB
     USART_TX_PIN_BUS4_PB9   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_B   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_8   ), /**< UART4 TX pin connected to PB9    */
-#endif
-#ifdef GPIOC
     USART_TX_PIN_BUS4_PC10  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_C   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_8   ), /**< UART4 TX pin connected to PC10   */
-#endif
-#ifdef GPIOD
     USART_TX_PIN_BUS4_PD1   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_D   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_8   ), /**< UART4 TX pin connected to PD1    */
     USART_TX_PIN_BUS4_PD12  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_D   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_8   ), /**< UART4 TX pin connected to PD12   */
-#endif
-#ifdef GPIOH
-#if !defined(STM32H523xx) && !defined(STM32H533xx) && !defined(STM32H543xx) && !defined(STM32H553xx)
+#if !defined(STM32H523xx) && \
+    !defined(STM32H533xx) && \
+    !defined(STM32H543xx) && \
+    !defined(STM32H553xx)
     USART_TX_PIN_BUS4_PH13  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_H   , GPIO_PIN_ID_13  , GPIO_ALT_FUNC_8   ), /**< UART4 TX pin connected to PH13   */
 #endif
-#endif
-#endif
+#endif /* UART4 */
 
-#ifdef UART5
-#ifdef GPIOB
-#if defined(STM32H523xx) || defined(STM32H533xx) || defined(STM32H543xx) || defined(STM32H553xx)
+#if defined(UART5)
+#if defined(STM32H523xx) || \
+    defined(STM32H533xx) || \
+    defined(STM32H543xx) || \
+    defined(STM32H553xx)
     USART_TX_PIN_BUS5_PB3   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_B   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_14  ), /**< UART5 TX pin connected to PB3    */
 #endif
     USART_TX_PIN_BUS5_PB6   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_B   , GPIO_PIN_ID_6   , GPIO_ALT_FUNC_14  ), /**< UART5 TX pin connected to PB6    */
     USART_TX_PIN_BUS5_PB13  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_B   , GPIO_PIN_ID_13  , GPIO_ALT_FUNC_14  ), /**< UART5 TX pin connected to PB13   */
-#endif
-#ifdef GPIOC
     USART_TX_PIN_BUS5_PC12  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_C   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_8   ), /**< UART5 TX pin connected to PC12   */
-#endif
-#ifdef GPIOJ
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
     USART_TX_PIN_BUS5_PJ11  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_J   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_8   ), /**< UART5 TX pin connected to PJ11   */
 #endif
-#endif
+#endif /* UART5 */
 
-#ifdef USART6
-#ifdef GPIOB
-#if defined(STM32H523xx) || defined(STM32H533xx) || defined(STM32H543xx) || defined(STM32H553xx)
+#if defined(USART6)
+#if defined(STM32H523xx) || \
+    defined(STM32H533xx) || \
+    defined(STM32H543xx) || \
+    defined(STM32H553xx)
     USART_TX_PIN_BUS6_PB5   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_B   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_6   ), /**< USART6 TX pin connected to PB5   */
 #endif
-#endif
-#ifdef GPIOC
     USART_TX_PIN_BUS6_PC6   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_C   , GPIO_PIN_ID_6   , GPIO_ALT_FUNC_7   ), /**< USART6 TX pin connected to PC6   */
-#endif
-#ifdef GPIOE
-#if defined(STM32H5E4xx) || defined(STM32H5E5xx) || defined(STM32H5F4xx) || defined(STM32H5F5xx)
+#if defined(STM32H5E4xx) || \
+    defined(STM32H5E5xx) || \
+    defined(STM32H5F4xx) || \
+    defined(STM32H5F5xx)
     USART_TX_PIN_BUS6_PE11  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_E   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_7   ), /**< USART6 TX pin connected to PE11  */
 #endif
-#endif
-#ifdef GPIOG
     USART_TX_PIN_BUS6_PG14  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_G   , GPIO_PIN_ID_14  , GPIO_ALT_FUNC_7   ), /**< USART6 TX pin connected to PG14  */
-#endif
-#ifdef GPIOK
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
     USART_TX_PIN_BUS6_PK13  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_K   , GPIO_PIN_ID_13  , GPIO_ALT_FUNC_7   ), /**< USART6 TX pin connected to PK13  */
 #endif
-#endif
+#endif /* USART6 */
 
-#ifdef UART7
-#ifdef GPIOA
+#if defined(UART7)
     USART_TX_PIN_BUS7_PA15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_7   , GPIO_PORT_A   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_11  ), /**< UART7 TX pin connected to PA15   */
-#endif
-#ifdef GPIOB
     USART_TX_PIN_BUS7_PB4   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_7   , GPIO_PORT_B   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_11  ), /**< UART7 TX pin connected to PB4    */
-#endif
-#ifdef GPIOE
     USART_TX_PIN_BUS7_PE8   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_7   , GPIO_PORT_E   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_7   ), /**< UART7 TX pin connected to PE8    */
-#endif
-#ifdef GPIOF
     USART_TX_PIN_BUS7_PF7   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_7   , GPIO_PORT_F   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_7   ), /**< UART7 TX pin connected to PF7    */
-#endif
-#endif
+#endif /* UART7 */
 
-#ifdef UART8
-#ifdef GPIOE
-#if !defined(STM32H543xx) && !defined(STM32H553xx)
+#if defined(UART8)
+#if !defined(STM32H543xx) && \
+    !defined(STM32H553xx)
     USART_TX_PIN_BUS8_PE1   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_8   , GPIO_PORT_E   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_8   ), /**< UART8 TX pin connected to PE1    */
 #endif
     USART_TX_PIN_BUS8_PE2   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_8   , GPIO_PORT_E   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_8   ), /**< UART8 TX pin connected to PE2    */
-#if defined(STM32H543xx) || defined(STM32H553xx)
+#if defined(STM32H543xx) || \
+    defined(STM32H553xx)
     USART_TX_PIN_BUS8_PE4   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_8   , GPIO_PORT_E   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_13  ), /**< UART8 TX pin connected to PE4    */
 #endif
-#endif
-#ifdef GPIOH
-#if !defined(STM32H543xx) && !defined(STM32H553xx)
+#if !defined(STM32H543xx) && \
+    !defined(STM32H553xx)
     USART_TX_PIN_BUS8_PH13  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_8   , GPIO_PORT_H   , GPIO_PIN_ID_13  , GPIO_ALT_FUNC_7   ), /**< UART8 TX pin connected to PH13   */
 #endif
-#endif
-#endif
+#endif /* UART8 */
 
-#ifdef UART9
-#ifdef GPIOD
+#if defined(UART9)
     USART_TX_PIN_BUS9_PD15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_9   , GPIO_PORT_D   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_11  ), /**< UART9 TX pin connected to PD15   */
-#endif
-#ifdef GPIOF
-#if !defined(STM32H562xx) && !defined(STM32H563xx) && !defined(STM32H573xx)
+#if !defined(STM32H562xx) && \
+    !defined(STM32H563xx) && \
+    !defined(STM32H573xx)
     USART_TX_PIN_BUS9_PF1   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_9   , GPIO_PORT_F   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_11  ), /**< UART9 TX pin connected to PF1    */
 #endif
-#endif
-#ifdef GPIOG
     USART_TX_PIN_BUS9_PG1   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_9   , GPIO_PORT_G   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_11  ), /**< UART9 TX pin connected to PG1    */
-#endif
-#endif
+#endif /* UART9 */
 
-#ifdef USART10
-#ifdef GPIOE
+#if defined(USART10)
     USART_TX_PIN_BUS10_PE3  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_10  , GPIO_PORT_E   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART10 TX pin connected to PE3  */
-#endif
-#ifdef GPIOG
     USART_TX_PIN_BUS10_PG12 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_10  , GPIO_PORT_G   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_6   ), /**< USART10 TX pin connected to PG12 */
-#endif
-#ifdef GPIOJ
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
     USART_TX_PIN_BUS10_PJ6  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_10  , GPIO_PORT_J   , GPIO_PIN_ID_6   , GPIO_ALT_FUNC_6   ), /**< USART10 TX pin connected to PJ6  */
 #endif
-#endif
+#endif /* USART10 */
 
-#ifdef USART11
-#ifdef GPIOA
+#if defined(USART11)
     USART_TX_PIN_BUS11_PA6  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_11  , GPIO_PORT_A   , GPIO_PIN_ID_6   , GPIO_ALT_FUNC_7   ), /**< USART11 TX pin connected to PA6  */
-#endif
-#ifdef GPIOF
     USART_TX_PIN_BUS11_PF3  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_11  , GPIO_PORT_F   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART11 TX pin connected to PF3  */
-#endif
-#ifdef GPIOI
-#if !defined(STM32H562xx) && !defined(STM32H563xx) && !defined(STM32H573xx)
+#if !defined(STM32H562xx) && \
+    !defined(STM32H563xx) && \
+    !defined(STM32H573xx)
     USART_TX_PIN_BUS11_PI11 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_11  , GPIO_PORT_I   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_7   ), /**< USART11 TX pin connected to PI11 */
 #endif
-#endif
-#endif
+#endif /* USART11 */
 
-#ifdef UART12
-#ifdef GPIOE
+#if defined(UART12)
     USART_TX_PIN_BUS12_PE10 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_12  , GPIO_PORT_E   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_6   ), /**< UART12 TX pin connected to PE10  */
-#endif
-#ifdef GPIOF
     USART_TX_PIN_BUS12_PF2  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_12  , GPIO_PORT_F   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_6   ), /**< UART12 TX pin connected to PF2   */
-#endif
-#ifdef GPIOG
     USART_TX_PIN_BUS12_PG3  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_12  , GPIO_PORT_G   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< UART12 TX pin connected to PG3   */
-#endif
-#endif
+#endif /* UART12 */
 
     USART_TX_PIN_UNUSED     = USART_PIN_BIT_MASK_ENCODE( USART_BUS_CNT , GPIO_PORT_CNT , GPIO_PIN_ID_CNT , GPIO_ALT_FUNC_CNT ), /**< Identification of unused pin    */
 }   usart_TxPin_t;
 
 
-/** \brief List of Driver Enable (DE) pins available for USART/UART peripherals */
+/**
+ * \brief List of Driver Enable (DE) pins available for USART/UART peripherals
+ *
+ * The pads and alternate functions are the same as of the RTS pins of the hardware flow control
+ * (\ref usart_RtsPin_t).
+ */
 typedef enum
 {
-#ifdef USART1
-#ifdef GPIOA
 #if defined(STM32H503xx)
     USART_DE_PIN_BUS1_PA4   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_8   ), /**< USART1 DE pin connected to PA4   */
-#endif
-#if defined(STM32H503xx)
     USART_DE_PIN_BUS1_PA7   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_8   ), /**< USART1 DE pin connected to PA7   */
 #endif
     USART_DE_PIN_BUS1_PA12  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_7   ), /**< USART1 DE pin connected to PA12  */
-#endif
-#ifdef GPIOC
 #if defined(STM32H503xx)
     USART_DE_PIN_BUS1_PC2   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_C   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_7   ), /**< USART1 DE pin connected to PC2   */
 #endif
-#endif
-#ifdef GPIOK
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
     USART_DE_PIN_BUS1_PK4   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_K   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART1 DE pin connected to PK4   */
 #endif
-#endif
 
-#ifdef USART2
-#ifdef GPIOA
     USART_DE_PIN_BUS2_PA1   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_7   ), /**< USART2 DE pin connected to PA1   */
 #if defined(STM32H503xx)
     USART_DE_PIN_BUS2_PA15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_11  ), /**< USART2 DE pin connected to PA15  */
-#endif
-#endif
-#ifdef GPIOB
-#if defined(STM32H503xx)
     USART_DE_PIN_BUS2_PB15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_B   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_11  ), /**< USART2 DE pin connected to PB15  */
-#endif
-#endif
-#ifdef GPIOC
-#if defined(STM32H503xx)
     USART_DE_PIN_BUS2_PC10  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_C   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_13  ), /**< USART2 DE pin connected to PC10  */
-#endif
-#endif
-#ifdef GPIOD
-#if defined(STM32H503xx)
     USART_DE_PIN_BUS2_PD2   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_D   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_9   ), /**< USART2 DE pin connected to PD2   */
 #endif
 #if !defined(STM32H503xx)
     USART_DE_PIN_BUS2_PD4   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_D   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART2 DE pin connected to PD4   */
 #endif
-#endif
-#endif
 
-#ifdef USART3
-#ifdef GPIOA
 #if defined(STM32H503xx)
     USART_DE_PIN_BUS3_PA7   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_A   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_9   ), /**< USART3 DE pin connected to PA7   */
-#endif
-#if defined(STM32H503xx)
     USART_DE_PIN_BUS3_PA11  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_A   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_13  ), /**< USART3 DE pin connected to PA11  */
 #endif
-#endif
-#ifdef GPIOB
     USART_DE_PIN_BUS3_PB14  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_14  , GPIO_ALT_FUNC_7   ), /**< USART3 DE pin connected to PB14  */
-#endif
-#ifdef GPIOC
 #if defined(STM32H503xx)
     USART_DE_PIN_BUS3_PC9   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_C   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_7   ), /**< USART3 DE pin connected to PC9   */
 #endif
-#endif
-#ifdef GPIOD
 #if !defined(STM32H503xx)
     USART_DE_PIN_BUS3_PD12  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_D   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_7   ), /**< USART3 DE pin connected to PD12  */
 #endif
-#endif
-#ifdef GPIOJ
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
     USART_DE_PIN_BUS3_PJ3   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_J   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART3 DE pin connected to PJ3   */
 #endif
-#endif
 
-#ifdef UART4
-#ifdef GPIOA
+#if defined(UART4)
     USART_DE_PIN_BUS4_PA15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_A   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_8   ), /**< UART4 DE pin connected to PA15   */
-#endif
-#ifdef GPIOB
     USART_DE_PIN_BUS4_PB14  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_B   , GPIO_PIN_ID_14  , GPIO_ALT_FUNC_8   ), /**< UART4 DE pin connected to PB14   */
-#endif
-#endif
+#endif /* UART4 */
 
-#ifdef UART5
-#ifdef GPIOC
+#if defined(UART5)
     USART_DE_PIN_BUS5_PC8   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_C   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_8   ), /**< UART5 DE pin connected to PC8    */
-#endif
-#ifdef GPIOE
-#if defined(STM32H5E4xx) || defined(STM32H5E5xx) || defined(STM32H5F4xx) || defined(STM32H5F5xx)
+#if defined(STM32H5E4xx) || \
+    defined(STM32H5E5xx) || \
+    defined(STM32H5F4xx) || \
+    defined(STM32H5F5xx)
     USART_DE_PIN_BUS5_PE13  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_E   , GPIO_PIN_ID_13  , GPIO_ALT_FUNC_8   ), /**< UART5 DE pin connected to PE13   */
 #endif
-#endif
-#ifdef GPIOJ
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
     USART_DE_PIN_BUS5_PJ8   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_J   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_8   ), /**< UART5 DE pin connected to PJ8    */
 #endif
-#endif
+#endif /* UART5 */
 
-#ifdef USART6
-#ifdef GPIOG
+#if defined(USART6)
     USART_DE_PIN_BUS6_PG8   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_G   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_7   ), /**< USART6 DE pin connected to PG8   */
     USART_DE_PIN_BUS6_PG12  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_G   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_7   ), /**< USART6 DE pin connected to PG12  */
-#endif
-#ifdef GPIOK
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
     USART_DE_PIN_BUS6_PK11  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_K   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_7   ), /**< USART6 DE pin connected to PK11  */
 #endif
-#endif
+#endif /* USART6 */
 
-#ifdef UART7
-#ifdef GPIOE
+#if defined(UART7)
     USART_DE_PIN_BUS7_PE9   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_7   , GPIO_PORT_E   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_7   ), /**< UART7 DE pin connected to PE9    */
-#endif
-#ifdef GPIOF
     USART_DE_PIN_BUS7_PF8   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_7   , GPIO_PORT_F   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_7   ), /**< UART7 DE pin connected to PF8    */
-#endif
-#endif
+#endif /* UART7 */
 
-#ifdef UART8
-#ifdef GPIOD
+#if defined(UART8)
     USART_DE_PIN_BUS8_PD15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_8   , GPIO_PORT_D   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_8   ), /**< UART8 DE pin connected to PD15   */
-#endif
-#endif
+#endif /* UART8 */
 
-#ifdef UART9
-#ifdef GPIOD
+#if defined(UART9)
     USART_DE_PIN_BUS9_PD13  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_9   , GPIO_PORT_D   , GPIO_PIN_ID_13  , GPIO_ALT_FUNC_11  ), /**< UART9 DE pin connected to PD13   */
-#endif
-#endif
+#endif /* UART9 */
 
-#ifdef USART10
-#ifdef GPIOG
+#if defined(USART10)
     USART_DE_PIN_BUS10_PG14 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_10  , GPIO_PORT_G   , GPIO_PIN_ID_14  , GPIO_ALT_FUNC_6   ), /**< USART10 DE pin connected to PG14 */
-#endif
-#ifdef GPIOJ
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
     USART_DE_PIN_BUS10_PJ15 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_10  , GPIO_PORT_J   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_6   ), /**< USART10 DE pin connected to PJ15 */
 #endif
-#endif
+#endif /* USART10 */
 
-#ifdef USART11
-#ifdef GPIOC
+#if defined(USART11)
     USART_DE_PIN_BUS11_PC1  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_11  , GPIO_PORT_C   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_7   ), /**< USART11 DE pin connected to PC1  */
-#endif
-#ifdef GPIOG
     USART_DE_PIN_BUS11_PG11 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_11  , GPIO_PORT_G   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_7   ), /**< USART11 DE pin connected to PG11 */
-#endif
-#ifdef GPIOJ
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
     USART_DE_PIN_BUS11_PJ13 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_11  , GPIO_PORT_J   , GPIO_PIN_ID_13  , GPIO_ALT_FUNC_7   ), /**< USART11 DE pin connected to PJ13 */
 #endif
-#endif
+#endif /* USART11 */
 
-#ifdef UART12
-#ifdef GPIOC
+#if defined(UART12)
     USART_DE_PIN_BUS12_PC5  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_12  , GPIO_PORT_C   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_7   ), /**< UART12 DE pin connected to PC5   */
-#endif
-#ifdef GPIOE
     USART_DE_PIN_BUS12_PE7  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_12  , GPIO_PORT_E   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_6   ), /**< UART12 DE pin connected to PE7   */
-#endif
-#endif
+#endif /* UART12 */
 
     USART_DE_PIN_UNUSED     = USART_PIN_BIT_MASK_ENCODE( USART_BUS_CNT , GPIO_PORT_CNT , GPIO_PIN_ID_CNT , GPIO_ALT_FUNC_CNT ), /**< Identification of unused pin    */
 }   usart_DePin_t;
+
+
+/** \brief List of Clear To Send (CTS) pins available for USART/UART peripherals (input of the hardware flow control) */
+typedef enum
+{
+#if defined(STM32H503xx)
+    USART_CTS_PIN_BUS1_PA0   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_8   ), /**< USART1 CTS pin connected to PA0 */
+#endif
+    USART_CTS_PIN_BUS1_PA11  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_7   ), /**< USART1 CTS pin connected to PA11 */
+#if defined(STM32H503xx)
+    USART_CTS_PIN_BUS1_PA15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_8   ), /**< USART1 CTS pin connected to PA15 */
+    USART_CTS_PIN_BUS1_PC1   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_C   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_7   ), /**< USART1 CTS pin connected to PC1 */
+#endif
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
+    USART_CTS_PIN_BUS1_PK3   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_K   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART1 CTS pin connected to PK3 */
+#endif
+
+    USART_CTS_PIN_BUS2_PA0   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_7   ), /**< USART2 CTS pin connected to PA0 */
+#if defined(STM32H503xx)
+    USART_CTS_PIN_BUS2_PA5   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_11  ), /**< USART2 CTS pin connected to PA5 */
+    USART_CTS_PIN_BUS2_PB6   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_B   , GPIO_PIN_ID_6   , GPIO_ALT_FUNC_11  ), /**< USART2 CTS pin connected to PB6 */
+    USART_CTS_PIN_BUS2_PC3   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_C   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART2 CTS pin connected to PC3 */
+    USART_CTS_PIN_BUS2_PC9   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_C   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_13  ), /**< USART2 CTS pin connected to PC9 */
+#endif
+#if !defined(STM32H503xx)
+    USART_CTS_PIN_BUS2_PD3   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_D   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART2 CTS pin connected to PD3 */
+#endif
+
+#if defined(STM32H503xx)
+    USART_CTS_PIN_BUS3_PA0   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_A   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_9   ), /**< USART3 CTS pin connected to PA0 */
+#endif
+    USART_CTS_PIN_BUS3_PB13  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_13  , GPIO_ALT_FUNC_7   ), /**< USART3 CTS pin connected to PB13 */
+#if defined(STM32H503xx)
+    USART_CTS_PIN_BUS3_PB15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_7   ), /**< USART3 CTS pin connected to PB15 */
+    USART_CTS_PIN_BUS3_PD2   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_D   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_7   ), /**< USART3 CTS pin connected to PD2 */
+#endif
+#if !defined(STM32H503xx)
+    USART_CTS_PIN_BUS3_PD11  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_D   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_7   ), /**< USART3 CTS pin connected to PD11 */
+#endif
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
+    USART_CTS_PIN_BUS3_PJ4   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_J   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART3 CTS pin connected to PJ4 */
+#endif
+
+#if defined(UART4)
+    USART_CTS_PIN_BUS4_PB0   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_B   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_8   ), /**< UART4 CTS pin connected to PB0 */
+    USART_CTS_PIN_BUS4_PB15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_B   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_8   ), /**< UART4 CTS pin connected to PB15 */
+#endif /* UART4 */
+
+#if defined(UART5)
+    USART_CTS_PIN_BUS5_PC9   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_C   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_8   ), /**< UART5 CTS pin connected to PC9 */
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
+    USART_CTS_PIN_BUS5_PJ9   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_J   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_8   ), /**< UART5 CTS pin connected to PJ9 */
+#endif
+#endif /* UART5 */
+
+#if defined(USART6)
+#if defined(STM32H523xx) || \
+    defined(STM32H533xx) || \
+    defined(STM32H543xx) || \
+    defined(STM32H553xx)
+    USART_CTS_PIN_BUS6_PB7   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_B   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_6   ), /**< USART6 CTS pin connected to PB7 */
+#endif
+    USART_CTS_PIN_BUS6_PG13  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_G   , GPIO_PIN_ID_13  , GPIO_ALT_FUNC_7   ), /**< USART6 CTS pin connected to PG13 */
+    USART_CTS_PIN_BUS6_PG15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_G   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_7   ), /**< USART6 CTS pin connected to PG15 */
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
+    USART_CTS_PIN_BUS6_PK12  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_K   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_7   ), /**< USART6 CTS pin connected to PK12 */
+#endif
+#endif /* USART6 */
+
+#if defined(UART7)
+    USART_CTS_PIN_BUS7_PE10  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_7   , GPIO_PORT_E   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_7   ), /**< UART7 CTS pin connected to PE10 */
+    USART_CTS_PIN_BUS7_PF9   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_7   , GPIO_PORT_F   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_7   ), /**< UART7 CTS pin connected to PF9 */
+#endif /* UART7 */
+
+#if defined(UART8)
+    USART_CTS_PIN_BUS8_PD14  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_8   , GPIO_PORT_D   , GPIO_PIN_ID_14  , GPIO_ALT_FUNC_8   ), /**< UART8 CTS pin connected to PD14 */
+#endif /* UART8 */
+
+#if defined(UART9)
+    USART_CTS_PIN_BUS9_PD0   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_9   , GPIO_PORT_D   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_11  ), /**< UART9 CTS pin connected to PD0 */
+#endif /* UART9 */
+
+#if defined(USART10)
+    USART_CTS_PIN_BUS10_PG13 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_10  , GPIO_PORT_G   , GPIO_PIN_ID_13  , GPIO_ALT_FUNC_6   ), /**< USART10 CTS pin connected to PG13 */
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
+    USART_CTS_PIN_BUS10_PJ14 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_10  , GPIO_PORT_J   , GPIO_PIN_ID_14  , GPIO_ALT_FUNC_6   ), /**< USART10 CTS pin connected to PJ14 */
+#endif
+#endif /* USART10 */
+
+#if defined(USART11)
+    USART_CTS_PIN_BUS11_PB15 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_11  , GPIO_PORT_B   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_7   ), /**< USART11 CTS pin connected to PB15 */
+    USART_CTS_PIN_BUS11_PF5  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_11  , GPIO_PORT_F   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_7   ), /**< USART11 CTS pin connected to PF5 */
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
+    USART_CTS_PIN_BUS11_PJ12 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_11  , GPIO_PORT_J   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_7   ), /**< USART11 CTS pin connected to PJ12 */
+#endif
+#endif /* USART11 */
+
+#if defined(UART12)
+    USART_CTS_PIN_BUS12_PB3  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_12  , GPIO_PORT_B   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< UART12 CTS pin connected to PB3 */
+    USART_CTS_PIN_BUS12_PE8  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_12  , GPIO_PORT_E   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_6   ), /**< UART12 CTS pin connected to PE8 */
+#endif /* UART12 */
+
+    USART_CTS_PIN_UNUSED     = USART_PIN_BIT_MASK_ENCODE( USART_BUS_CNT , GPIO_PORT_CNT , GPIO_PIN_ID_CNT , GPIO_ALT_FUNC_CNT ), /**< Identification of unused pin */
+}   usart_CtsPin_t;
+
+
+/**
+ * \brief List of Request To Send (RTS) pins available for USART/UART peripherals (output of the hardware flow control)
+ *
+ * The pads and alternate functions are the same as of the Driver Enable pins (\ref usart_DePin_t).
+ */
+typedef enum
+{
+#if defined(STM32H503xx)
+    USART_RTS_PIN_BUS1_PA4   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_8   ), /**< USART1 RTS pin connected to PA4 */
+    USART_RTS_PIN_BUS1_PA7   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_8   ), /**< USART1 RTS pin connected to PA7 */
+#endif
+    USART_RTS_PIN_BUS1_PA12  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_7   ), /**< USART1 RTS pin connected to PA12 */
+#if defined(STM32H503xx)
+    USART_RTS_PIN_BUS1_PC2   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_C   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_7   ), /**< USART1 RTS pin connected to PC2 */
+#endif
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
+    USART_RTS_PIN_BUS1_PK4   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_K   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART1 RTS pin connected to PK4 */
+#endif
+
+    USART_RTS_PIN_BUS2_PA1   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_7   ), /**< USART2 RTS pin connected to PA1 */
+#if defined(STM32H503xx)
+    USART_RTS_PIN_BUS2_PA15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_11  ), /**< USART2 RTS pin connected to PA15 */
+    USART_RTS_PIN_BUS2_PB15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_B   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_11  ), /**< USART2 RTS pin connected to PB15 */
+    USART_RTS_PIN_BUS2_PC10  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_C   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_13  ), /**< USART2 RTS pin connected to PC10 */
+    USART_RTS_PIN_BUS2_PD2   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_D   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_9   ), /**< USART2 RTS pin connected to PD2 */
+#endif
+#if !defined(STM32H503xx)
+    USART_RTS_PIN_BUS2_PD4   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_D   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART2 RTS pin connected to PD4 */
+#endif
+
+#if defined(STM32H503xx)
+    USART_RTS_PIN_BUS3_PA7   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_A   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_9   ), /**< USART3 RTS pin connected to PA7 */
+    USART_RTS_PIN_BUS3_PA11  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_A   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_13  ), /**< USART3 RTS pin connected to PA11 */
+#endif
+    USART_RTS_PIN_BUS3_PB14  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_14  , GPIO_ALT_FUNC_7   ), /**< USART3 RTS pin connected to PB14 */
+#if defined(STM32H503xx)
+    USART_RTS_PIN_BUS3_PC9   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_C   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_7   ), /**< USART3 RTS pin connected to PC9 */
+#endif
+#if !defined(STM32H503xx)
+    USART_RTS_PIN_BUS3_PD12  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_D   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_7   ), /**< USART3 RTS pin connected to PD12 */
+#endif
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
+    USART_RTS_PIN_BUS3_PJ3   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_J   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART3 RTS pin connected to PJ3 */
+#endif
+
+#if defined(UART4)
+    USART_RTS_PIN_BUS4_PA15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_A   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_8   ), /**< UART4 RTS pin connected to PA15 */
+    USART_RTS_PIN_BUS4_PB14  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_B   , GPIO_PIN_ID_14  , GPIO_ALT_FUNC_8   ), /**< UART4 RTS pin connected to PB14 */
+#endif /* UART4 */
+
+#if defined(UART5)
+    USART_RTS_PIN_BUS5_PC8   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_C   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_8   ), /**< UART5 RTS pin connected to PC8 */
+#if defined(STM32H5E4xx) || \
+    defined(STM32H5E5xx) || \
+    defined(STM32H5F4xx) || \
+    defined(STM32H5F5xx)
+    USART_RTS_PIN_BUS5_PE13  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_E   , GPIO_PIN_ID_13  , GPIO_ALT_FUNC_8   ), /**< UART5 RTS pin connected to PE13 */
+#endif
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
+    USART_RTS_PIN_BUS5_PJ8   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_J   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_8   ), /**< UART5 RTS pin connected to PJ8 */
+#endif
+#endif /* UART5 */
+
+#if defined(USART6)
+    USART_RTS_PIN_BUS6_PG8   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_G   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_7   ), /**< USART6 RTS pin connected to PG8 */
+    USART_RTS_PIN_BUS6_PG12  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_G   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_7   ), /**< USART6 RTS pin connected to PG12 */
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
+    USART_RTS_PIN_BUS6_PK11  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_K   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_7   ), /**< USART6 RTS pin connected to PK11 */
+#endif
+#endif /* USART6 */
+
+#if defined(UART7)
+    USART_RTS_PIN_BUS7_PE9   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_7   , GPIO_PORT_E   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_7   ), /**< UART7 RTS pin connected to PE9 */
+    USART_RTS_PIN_BUS7_PF8   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_7   , GPIO_PORT_F   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_7   ), /**< UART7 RTS pin connected to PF8 */
+#endif /* UART7 */
+
+#if defined(UART8)
+    USART_RTS_PIN_BUS8_PD15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_8   , GPIO_PORT_D   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_8   ), /**< UART8 RTS pin connected to PD15 */
+#endif /* UART8 */
+
+#if defined(UART9)
+    USART_RTS_PIN_BUS9_PD13  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_9   , GPIO_PORT_D   , GPIO_PIN_ID_13  , GPIO_ALT_FUNC_11  ), /**< UART9 RTS pin connected to PD13 */
+#endif /* UART9 */
+
+#if defined(USART10)
+    USART_RTS_PIN_BUS10_PG14 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_10  , GPIO_PORT_G   , GPIO_PIN_ID_14  , GPIO_ALT_FUNC_6   ), /**< USART10 RTS pin connected to PG14 */
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
+    USART_RTS_PIN_BUS10_PJ15 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_10  , GPIO_PORT_J   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_6   ), /**< USART10 RTS pin connected to PJ15 */
+#endif
+#endif /* USART10 */
+
+#if defined(USART11)
+    USART_RTS_PIN_BUS11_PC1  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_11  , GPIO_PORT_C   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_7   ), /**< USART11 RTS pin connected to PC1 */
+    USART_RTS_PIN_BUS11_PG11 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_11  , GPIO_PORT_G   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_7   ), /**< USART11 RTS pin connected to PG11 */
+#if defined(STM32H5E5xx) || \
+    defined(STM32H5F5xx)
+    USART_RTS_PIN_BUS11_PJ13 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_11  , GPIO_PORT_J   , GPIO_PIN_ID_13  , GPIO_ALT_FUNC_7   ), /**< USART11 RTS pin connected to PJ13 */
+#endif
+#endif /* USART11 */
+
+#if defined(UART12)
+    USART_RTS_PIN_BUS12_PC5  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_12  , GPIO_PORT_C   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_7   ), /**< UART12 RTS pin connected to PC5 */
+    USART_RTS_PIN_BUS12_PE7  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_12  , GPIO_PORT_E   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_6   ), /**< UART12 RTS pin connected to PE7 */
+#endif /* UART12 */
+
+    USART_RTS_PIN_UNUSED     = USART_PIN_BIT_MASK_ENCODE( USART_BUS_CNT , GPIO_PORT_CNT , GPIO_PIN_ID_CNT , GPIO_ALT_FUNC_CNT ), /**< Identification of unused pin */
+}   usart_RtsPin_t;
 
 
 /** \brief USART data word width */
@@ -1187,6 +1222,8 @@ typedef struct
     usart_RxPin_t                 BusRxPin;             /**< RX GPIO pin used by peripheral                 */
     usart_TxPin_t                 BusTxPin;             /**< TX GPIO pin used by peripheral                 */
     usart_DePin_t                 BusDePin;             /**< Driver Enable (DE) GPIO pin used by peripheral */
+    usart_CtsPin_t                BusCtsPin;            /**< Clear To Send (CTS) GPIO pin of the hardware flow control used by peripheral  */
+    usart_RtsPin_t                BusRtsPin;            /**< Request To Send (RTS) GPIO pin of the hardware flow control used by peripheral */
 }   usart_BusConfig_t;
 
 

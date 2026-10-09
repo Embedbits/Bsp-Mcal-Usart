@@ -44,7 +44,8 @@ static void It_Usart_ErrorCallback      ( usart_XferErrorId_t errorId );
 /* ========================= SYMBOLIC CONSTANTS ============================= */
 
 /*----------------------------- Board configuration --------------------------*/
-#if defined(IT_BOARD_NUCLEO_H503RB) || defined(IT_BOARD_NUCLEO_H533RE)
+/* Boards are named by their MCU (IT_BOARD_<MCU>, name of the board from the detection) */
+#if defined(IT_BOARD_STM32H503xB)
 
     /** USART3, Arduino D7 (PA8, USART3_TX) - not connected on the board */
     #define IT_USART_BUS                    ( USART_BUS_3 )
@@ -52,7 +53,20 @@ static void It_Usart_ErrorCallback      ( usart_XferErrorId_t errorId );
     #define IT_USART_TX_PORT                ( GPIO_PORT_A )
     #define IT_USART_TX_PIN_ID              ( GPIO_PIN_ID_8 )
 
-#elif defined(IT_BOARD_NUCLEO_H563ZI) || defined(IT_BOARD_NUCLEO_H5E5ZJ)
+#elif defined(IT_BOARD_STM32H523xE) || \
+      defined(IT_BOARD_STM32H533xE)
+
+    /** USART1, Arduino D10 (PB6, USART1_TX) - not connected on the board (UART2 is ST-LINK VCP).
+     *  USART3 TX on PA8 is defined for STM32H503 only. */
+    #define IT_USART_BUS                    ( USART_BUS_1 )
+    #define IT_USART_TX_PIN                 ( USART_TX_PIN_BUS1_PB6 )
+    #define IT_USART_TX_PORT                ( GPIO_PORT_B )
+    #define IT_USART_TX_PIN_ID              ( GPIO_PIN_ID_6 )
+
+#elif defined(IT_BOARD_STM32H562xI) || \
+      defined(IT_BOARD_STM32H563xI) || \
+      defined(IT_BOARD_STM32H573xI) || \
+      defined(IT_BOARD_STM32H5E5xJ)
 
     /** USART1, PB6 (USART1_TX) - not connected on the board (USART3 is ST-LINK VCP) */
     #define IT_USART_BUS                    ( USART_BUS_1 )

@@ -137,6 +137,14 @@ Data handling is configured by `usart_BusConfig_t::DataConfig` in `Usart_Init()`
 - `usart_RequestState_t    Usart_InitRxGpio(usart_RxPin_t pinId);`
 - `usart_RequestState_t    Usart_InitTxGpio(usart_TxPin_t pinId);`
 - `usart_RequestState_t    Usart_InitDeGpio(usart_DePin_t pinId);`
+- `usart_RequestState_t    Usart_InitCtsGpio(usart_CtsPin_t pinId);`
+- `usart_RequestState_t    Usart_InitRtsGpio(usart_RtsPin_t pinId);`
+
+The items of `usart_RxPin_t` / `usart_TxPin_t` / `usart_DePin_t` / `usart_CtsPin_t` / `usart_RtsPin_t` are generated from the STM32CubeMX
+GPIO modes database - every pin item is active on exactly the CMSIS device lines whose package or
+die has the pin (guards by the device line). The pins of the hardware flow control are configured by
+`BusCtsPin` (CTS input) and `BusRtsPin` (RTS output) of `usart_BusConfig_t`; the RTS output has the same pads and
+alternate functions as the Driver Enable output (`BusDePin`).
 
 ---
 
