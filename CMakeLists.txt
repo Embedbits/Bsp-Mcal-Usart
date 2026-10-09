@@ -2,6 +2,7 @@
 # Sets the version of CMakeLists.txt file.
 # Never, under any circumstances, change this line. It is used by
 # the module generation script to identify the template version.
+
 #======================== Library configuration ===============================#
 # Publicly included directories to provide headers include
 set( Usart_PublicIncludeDirs
@@ -18,31 +19,32 @@ set( Usart_PrivateIncludeDirs
 # Source files list for current library generation
 set( Usart_SourceFiles
     Usart.c
-    Usart_CommDma.c
-    Usart_CommInt.c
-    Usart_CommPoll.c
+    Usart_Dma.c
+    Usart_Isr.c
+    Usart_Poll.c
 )
 
 
 # List of public header files provided by the current library
-set( Usart_PublicHeaders 
+set( Usart_PublicHeaders
     Usart_Types.h
-    Usart_Port.h 
+    Usart_Port.h
 )
 
 
 # List of dependent libraries that are publicly used by the current library
 set( Usart_PublicDependentLibs
-
+    Ral_Lib
+    Gpio_Lib
+    Dma_Lib
 )
 
 
 # List of dependent libraries that are privately used by the current library
 set( Usart_PrivateDependentLibs
     Ral_Lib
-    Gpio_Lib
     Nvic_Lib
-    Dma_Lib
+    Rcc_Lib
 )
 
 
@@ -84,10 +86,9 @@ target_include_directories( Usart_Lib
     PUBLIC
         $<BUILD_INTERFACE:${PUBLIC_HEADERS_DIR}>
         $<INSTALL_INTERFACE:include>
-        Usart_PublicIncludeDirs
+        ${Usart_PublicIncludeDirs}
     PRIVATE
-        ${Usart_IncludeDirs}
-        Usart_PrivateIncludeDirs
+        ${Usart_PrivateIncludeDirs}
 )
 
 
@@ -97,4 +98,14 @@ message(STATUS "Usart_Lib library created")
 #========================= Documentation configuration ========================#
 if(DOXYGEN_AVAILABLE STREQUAL "ON")
     Doxygen_AddPath("${CMAKE_CURRENT_SOURCE_DIR}/")
+endif()
+
+#========================= Unit tests configuration ===========================#
+if(UNIT_TESTING_AVAILABLE STREQUAL "ON")
+    UnitTesting_AddPath("${CMAKE_CURRENT_SOURCE_DIR}/Tests/UnitTests")
+endif()
+
+#===================== Integration tests configuration ========================#
+if(INTEGRATION_TESTING_AVAILABLE STREQUAL "ON")
+    IntegrationTesting_AddPath("${CMAKE_CURRENT_SOURCE_DIR}/Tests/IntegrationTests")
 endif()
