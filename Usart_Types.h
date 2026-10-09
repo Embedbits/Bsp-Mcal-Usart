@@ -1,4 +1,9 @@
 /**
+ * \defgroup Usart Usart
+ * \brief Usart module
+ */
+
+/**
  * \author Mr.Nobody
  * \file Usart_Types.h
  * \ingroup Usart
@@ -174,6 +179,7 @@ typedef enum
     USART_PRESCALER_CNT     /**< Count of options           */
 }   usart_Prescaler_t;
 
+
 /** \brief USART/UART bus identification */
 typedef enum
 {
@@ -193,96 +199,102 @@ typedef enum
     USART_BUS_5,      /**< USART bus 5 ID */
 #endif
 #ifdef USART6
-    USART_BUS_6,      /**< USART bus 5 ID */
+    USART_BUS_6,      /**< USART bus 6 ID */
+#endif
+#ifdef UART7
+    USART_BUS_7,      /**< USART bus 7 ID */
+#endif
+#ifdef UART8
+    USART_BUS_8,      /**< USART bus 8 ID */
+#endif
+#ifdef UART9
+    USART_BUS_9,      /**< USART bus 9 ID */
+#endif
+#ifdef USART10
+    USART_BUS_10,     /**< USART bus 10 ID */
+#endif
+#ifdef USART11
+    USART_BUS_11,     /**< USART bus 11 ID */
+#endif
+#ifdef UART12
+    USART_BUS_12,     /**< USART bus 12 ID */
 #endif
     USART_BUS_CNT
 }   usart_PeriphId_t;
-
-
 
 
 /** \brief List of RX pins available for USART/UART peripherals */
 typedef enum
 {
 #ifdef USART1
-#ifdef GPIOA
-    USART_RX_PIN_BUS1_PA10 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_7   ), /**< USART1 RX pin connected to PA10 */
-#endif
-#ifdef GPIOB
-    USART_RX_PIN_BUS1_PB7  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_B   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_7   ), /**< USART1 RX pin connected to PB7  */
-#endif
-#ifdef GPIOG
-    USART_RX_PIN_BUS1_PG10 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_G   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_7   ), /**< USART1 RX pin connected to PG10 */
+    USART_RX_PIN_BUS1_PA10  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_7   ), /**< USART1 RX pin connected to PA10  */
+    USART_RX_PIN_BUS1_PB7   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_B   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_7   ), /**< USART1 RX pin connected to PB7   */
+#if !defined( STM32U5F7xx ) && \
+    !defined( STM32U5G7xx )
+    USART_RX_PIN_BUS1_PG10  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_G   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_7   ), /**< USART1 RX pin connected to PG10  */
 #endif
 #endif
 
 #ifdef USART2
-#ifdef GPIOA
-    USART_RX_PIN_BUS2_PA3  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART2 RX pin connected to PA3  */
-#endif
-#ifdef GPIOA
-    USART_RX_PIN_BUS2_PA15 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_3   ), /**< USART2 RX pin connected to PA15 */
-#endif
-#ifdef GPIOD
-    USART_RX_PIN_BUS2_PD6  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_D   , GPIO_PIN_ID_6   , GPIO_ALT_FUNC_7   ), /**< USART2 RX pin connected to PD6  */
+#if !defined( STM32U535xx ) && \
+    !defined( STM32U545xx )
+    USART_RX_PIN_BUS2_PA3   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART2 RX pin connected to PA3   */
+    USART_RX_PIN_BUS2_PA15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_3   ), /**< USART2 RX pin connected to PA15  */
+    USART_RX_PIN_BUS2_PD6   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_D   , GPIO_PIN_ID_6   , GPIO_ALT_FUNC_7   ), /**< USART2 RX pin connected to PD6   */
 #endif
 #endif
 
 #ifdef USART3
-#ifdef GPIOA
-    USART_RX_PIN_BUS3_PA5  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_A   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_7   ), /**< USART3 RX pin connected to PA5  */
-#endif
-#ifdef GPIOB
-    USART_RX_PIN_BUS3_PB11 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_7   ), /**< USART3 RX pin connected to PB11 */
-#endif
-#ifdef GPIOC
-    USART_RX_PIN_BUS3_PC5  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_C   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_7   ), /**< USART3 RX pin connected to PC5  */
-#endif
-#ifdef GPIOC
-    USART_RX_PIN_BUS3_PC11 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_C   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_7   ), /**< USART3 RX pin connected to PC11 */
-#endif
-#ifdef GPIOD
-    USART_RX_PIN_BUS3_PD9  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_D   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_7   ), /**< USART3 RX pin connected to PD9  */
-#endif
+    USART_RX_PIN_BUS3_PA5   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_A   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_7   ), /**< USART3 RX pin connected to PA5   */
+    USART_RX_PIN_BUS3_PB11  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_7   ), /**< USART3 RX pin connected to PB11  */
+    USART_RX_PIN_BUS3_PC5   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_C   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_7   ), /**< USART3 RX pin connected to PC5   */
+    USART_RX_PIN_BUS3_PC11  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_C   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_7   ), /**< USART3 RX pin connected to PC11  */
+    USART_RX_PIN_BUS3_PD9   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_D   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_7   ), /**< USART3 RX pin connected to PD9   */
 #endif
 
 #ifdef UART4
-#ifdef GPIOA
-    USART_RX_PIN_BUS4_PA1  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_A   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_8   ), /**< UART4 RX pin connected to PA1   */
-#endif
-#ifdef GPIOC
-    USART_RX_PIN_BUS4_PC11 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_C   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_8   ), /**< UART4 RX pin connected to PC11  */
-#endif
+    USART_RX_PIN_BUS4_PA1   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_A   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_8   ), /**< UART4 RX pin connected to PA1   */
+    USART_RX_PIN_BUS4_PC11  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_C   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_8   ), /**< UART4 RX pin connected to PC11  */
 #endif
 
 #ifdef UART5
-#ifdef GPIOD
-    USART_RX_PIN_BUS5_PD2  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_D   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_8   ), /**< UART5 RX pin connected to PD2   */
-#endif
-#ifdef GPIOF
-    USART_RX_PIN_BUS5_PF4  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_F   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_8   ), /**< UART5 RX pin connected to PF4   */
+    USART_RX_PIN_BUS5_PD2   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_D   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_8   ), /**< UART5 RX pin connected to PD2   */
+#if defined( STM32U595xx ) || \
+    defined( STM32U599xx ) || \
+    defined( STM32U5A5xx ) || \
+    defined( STM32U5A9xx ) || \
+    defined( STM32U5F9xx ) || \
+    defined( STM32U5G9xx )
+    USART_RX_PIN_BUS5_PF4   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_F   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_8   ), /**< UART5 RX pin connected to PF4   */
 #endif
 #endif
 
 #ifdef USART6
-#ifdef GPIOC
-    USART_RX_PIN_BUS6_PC2  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_C   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_7   ), /**< USART2 RX pin connected to PC2  */
+#if !defined( STM32U535xx ) && \
+    !defined( STM32U545xx ) && \
+    !defined( STM32U575xx ) && \
+    !defined( STM32U585xx )
+    USART_RX_PIN_BUS6_PC2   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_C   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_7   ), /**< USART6 RX pin connected to PC2   */
+    USART_RX_PIN_BUS6_PC8   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_C   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_7   ), /**< USART6 RX pin connected to PC8   */
+    USART_RX_PIN_BUS6_PE0   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_E   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_7   ), /**< USART6 RX pin connected to PE0   */
 #endif
-#ifdef GPIOC
-    USART_RX_PIN_BUS6_PC8  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_C   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_7   ), /**< USART2 RX pin connected to PC8  */
+#if defined( STM32U595xx ) || \
+    defined( STM32U599xx ) || \
+    defined( STM32U5A5xx ) || \
+    defined( STM32U5A9xx ) || \
+    defined( STM32U5F9xx ) || \
+    defined( STM32U5G9xx )
+    USART_RX_PIN_BUS6_PF1   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_F   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_7   ), /**< USART6 RX pin connected to PF1   */
 #endif
-#ifdef GPIOE
-    USART_RX_PIN_BUS6_PE0  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_E   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_7   ), /**< USART2 RX pin connected to PE0  */
-#endif
-#ifdef GPIOF
-    USART_RX_PIN_BUS6_PF1  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_F   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_7   ), /**< USART2 RX pin connected to PF1  */
-#endif
-#ifdef GPIOJ
-    USART_RX_PIN_BUS6_PJ4  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_J   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART2 RX pin connected to PJ4  */
+#if defined( STM32U599xx ) || \
+    defined( STM32U5A9xx ) || \
+    defined( STM32U5F9xx ) || \
+    defined( STM32U5G9xx )
+    USART_RX_PIN_BUS6_PJ4   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_J   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART6 RX pin connected to PJ4   */
 #endif
 #endif
 
-    USART_RX_PIN_UNUSED    = USART_PIN_BIT_MASK_ENCODE( USART_BUS_CNT , GPIO_PORT_CNT , GPIO_PIN_ID_CNT , GPIO_ALT_FUNC_CNT ), /**< Identification of unused pin    */
+    USART_RX_PIN_UNUSED     = USART_PIN_BIT_MASK_ENCODE( USART_BUS_CNT , GPIO_PORT_CNT , GPIO_PIN_ID_CNT , GPIO_ALT_FUNC_CNT ), /**< Identification of unused pin    */
 }   usart_RxPin_t;
 
 
@@ -290,155 +302,234 @@ typedef enum
 typedef enum
 {
 #ifdef USART1
-#ifdef GPIOA
-    USART_TX_PIN_BUS1_PA9  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_7   ), /**< USART1 TX pin connected to PA9  */
-#endif
-#ifdef GPIOB
-    USART_TX_PIN_BUS1_PB6  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_B   , GPIO_PIN_ID_6   , GPIO_ALT_FUNC_7   ), /**< USART1 TX pin connected to PB6  */
-#endif
-#ifdef GPIOG
-    USART_TX_PIN_BUS1_PG9  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_G   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_7   ), /**< USART1 TX pin connected to PG9  */
+    USART_TX_PIN_BUS1_PA9   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_7   ), /**< USART1 TX pin connected to PA9   */
+    USART_TX_PIN_BUS1_PB6   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_B   , GPIO_PIN_ID_6   , GPIO_ALT_FUNC_7   ), /**< USART1 TX pin connected to PB6   */
+#if !defined( STM32U5F7xx ) && \
+    !defined( STM32U5G7xx )
+    USART_TX_PIN_BUS1_PG9   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_G   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_7   ), /**< USART1 TX pin connected to PG9   */
 #endif
 #endif
 
 #ifdef USART2
-#ifdef GPIOA
-    USART_TX_PIN_BUS2_PA2  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_7   ), /**< USART2 TX pin connected to PA2  */
-#endif
-#ifdef GPIOD
-    USART_TX_PIN_BUS2_PD5  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_D   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_7   ), /**< USART2 TX pin connected to PD5  */
+#if !defined( STM32U535xx ) && \
+    !defined( STM32U545xx )
+    USART_TX_PIN_BUS2_PA2   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_7   ), /**< USART2 TX pin connected to PA2   */
+    USART_TX_PIN_BUS2_PD5   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_D   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_7   ), /**< USART2 TX pin connected to PD5   */
 #endif
 #endif
 
 #ifdef USART3
-#ifdef GPIOA
-    USART_TX_PIN_BUS3_PA7  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_A   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_7   ), /**< USART3 TX pin connected to PA7  */
-#endif
-#ifdef GPIOB
-    USART_TX_PIN_BUS3_PB10 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_7   ), /**< USART3 TX pin connected to PB10 */
-#endif
-#ifdef GPIOC
-    USART_TX_PIN_BUS3_PC4  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_C   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART3 TX pin connected to PC4  */
-#endif
-#ifdef GPIOC
-    USART_TX_PIN_BUS3_PC10 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_C   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_7   ), /**< USART3 TX pin connected to PC10 */
-#endif
-#ifdef GPIOD
-    USART_TX_PIN_BUS3_PD8  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_D   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_7   ), /**< USART3 TX pin connected to PD8  */
-#endif
+    USART_TX_PIN_BUS3_PA7   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_A   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_7   ), /**< USART3 TX pin connected to PA7   */
+    USART_TX_PIN_BUS3_PB10  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_7   ), /**< USART3 TX pin connected to PB10  */
+    USART_TX_PIN_BUS3_PC4   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_C   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART3 TX pin connected to PC4   */
+    USART_TX_PIN_BUS3_PC10  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_C   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_7   ), /**< USART3 TX pin connected to PC10  */
+    USART_TX_PIN_BUS3_PD8   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_D   , GPIO_PIN_ID_8   , GPIO_ALT_FUNC_7   ), /**< USART3 TX pin connected to PD8   */
 #endif
 
 #ifdef UART4
-#ifdef GPIOA
-    USART_TX_PIN_BUS4_PA0  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_A   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_8   ), /**< UART4 TX pin connected to PA0   */
-#endif
-#ifdef GPIOC
-    USART_TX_PIN_BUS4_PC10 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_C   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_8   ), /**< UART4 TX pin connected to PC10  */
-#endif
+    USART_TX_PIN_BUS4_PA0   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_A   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_8   ), /**< UART4 TX pin connected to PA0   */
+    USART_TX_PIN_BUS4_PC10  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_C   , GPIO_PIN_ID_10  , GPIO_ALT_FUNC_8   ), /**< UART4 TX pin connected to PC10  */
 #endif
 
 #ifdef UART5
-#ifdef GPIOC
-    USART_TX_PIN_BUS5_PC12 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_C   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_8   ), /**< UART5 TX pin connected to PC12  */
-#endif
-#ifdef GPIOF
-    USART_TX_PIN_BUS5_PF3  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_F   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_8   ), /**< UART5 TX pin connected to PF3   */
+    USART_TX_PIN_BUS5_PC12  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_C   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_8   ), /**< UART5 TX pin connected to PC12  */
+#if defined( STM32U595xx ) || \
+    defined( STM32U599xx ) || \
+    defined( STM32U5A5xx ) || \
+    defined( STM32U5A9xx ) || \
+    defined( STM32U5F9xx ) || \
+    defined( STM32U5G9xx )
+    USART_TX_PIN_BUS5_PF3   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_F   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_8   ), /**< UART5 TX pin connected to PF3   */
 #endif
 #endif
 
 #ifdef USART6
-#ifdef GPIOC
-    USART_TX_PIN_BUS6_PC3  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_C   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART6 TX pin connected to PC3  */
+#if !defined( STM32U535xx ) && \
+    !defined( STM32U545xx ) && \
+    !defined( STM32U575xx ) && \
+    !defined( STM32U585xx )
+    USART_TX_PIN_BUS6_PC3   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_C   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART6 TX pin connected to PC3   */
+    USART_TX_PIN_BUS6_PC9   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_C   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_7   ), /**< USART6 TX pin connected to PC9   */
+    USART_TX_PIN_BUS6_PE1   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_E   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_7   ), /**< USART6 TX pin connected to PE1   */
 #endif
-#ifdef GPIOC
-    USART_TX_PIN_BUS6_PC9  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_C   , GPIO_PIN_ID_9   , GPIO_ALT_FUNC_7   ), /**< USART6 TX pin connected to PC9  */
+#if defined( STM32U595xx ) || \
+    defined( STM32U599xx ) || \
+    defined( STM32U5A5xx ) || \
+    defined( STM32U5A9xx ) || \
+    defined( STM32U5F9xx ) || \
+    defined( STM32U5G9xx )
+    USART_TX_PIN_BUS6_PF0   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_F   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_7   ), /**< USART6 TX pin connected to PF0   */
 #endif
-#ifdef GPIOE
-    USART_TX_PIN_BUS6_PE1  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_E   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_7   ), /**< USART6 TX pin connected to PE1  */
-#endif
-#ifdef GPIOF
-    USART_TX_PIN_BUS6_PF0  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_F   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_7   ), /**< USART6 TX pin connected to PF0  */
-#endif
-#ifdef GPIOJ
-    USART_TX_PIN_BUS6_PJ3  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_J   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART6 TX pin connected to PJ3  */
+#if defined( STM32U599xx ) || \
+    defined( STM32U5A9xx ) || \
+    defined( STM32U5F9xx ) || \
+    defined( STM32U5G9xx )
+    USART_TX_PIN_BUS6_PJ3   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_J   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART6 TX pin connected to PJ3   */
 #endif
 #endif
 
-    USART_TX_PIN_UNUSED    = USART_PIN_BIT_MASK_ENCODE( USART_BUS_CNT , GPIO_PORT_CNT , GPIO_PIN_ID_CNT , GPIO_ALT_FUNC_CNT ), /**< Identification of unused pin    */
+    USART_TX_PIN_UNUSED     = USART_PIN_BIT_MASK_ENCODE( USART_BUS_CNT , GPIO_PORT_CNT , GPIO_PIN_ID_CNT , GPIO_ALT_FUNC_CNT ), /**< Identification of unused pin    */
 }   usart_TxPin_t;
 
 
-/** \brief List of Driver Enable (DE) pins available for USART/UART peripherals */
+/**
+ * \brief List of Driver Enable (DE) pins available for USART/UART peripherals
+ *
+ * The pads and alternate functions are the same as of the RTS pins of the hardware flow control
+ * (\ref usart_RtsPin_t).
+ */
 typedef enum
 {
 #ifdef USART1
-#ifdef GPIOA
-    USART_DE_PIN_BUS1_PA12 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_7   ), /**< USART1 DE pin connected to PA12 */
-#endif
-#ifdef GPIOB
-    USART_DE_PIN_BUS1_PB3  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_B   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART1 DE pin connected to PB3  */
-#endif
-#ifdef GPIOG
-    USART_DE_PIN_BUS1_PG12 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_G   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_7   ), /**< USART1 DE pin connected to PG12 */
+    USART_DE_PIN_BUS1_PA12  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_7   ), /**< USART1 DE pin connected to PA12  */
+    USART_DE_PIN_BUS1_PB3   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_B   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART1 DE pin connected to PB3   */
+#if !defined( STM32U5F7xx ) && \
+    !defined( STM32U5G7xx )
+    USART_DE_PIN_BUS1_PG12  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_G   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_7   ), /**< USART1 DE pin connected to PG12  */
 #endif
 #endif
 
 #ifdef USART2
-#ifdef GPIOA
-    USART_DE_PIN_BUS2_PA1  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_7   ), /**< USART2 DE pin connected to PA1  */
-#endif
-#ifdef GPIOD
-    USART_DE_PIN_BUS2_PD4  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_D   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART2 DE pin connected to PD4  */
+#if !defined( STM32U535xx ) && \
+    !defined( STM32U545xx )
+    USART_DE_PIN_BUS2_PA1   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_7   ), /**< USART2 DE pin connected to PA1   */
+    USART_DE_PIN_BUS2_PD4   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_D   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART2 DE pin connected to PD4   */
 #endif
 #endif
 
 #ifdef USART3
-#ifdef GPIOA
-    USART_DE_PIN_BUS3_PA15 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_A   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_7   ), /**< USART3 DE pin connected to PA15 */
-#endif
-#ifdef GPIOB
-    USART_DE_PIN_BUS3_PB1  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_7   ), /**< USART3 DE pin connected to PB1  */
-#endif
-#ifdef GPIOB
-    USART_DE_PIN_BUS3_PB14 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_14  , GPIO_ALT_FUNC_7   ), /**< USART3 DE pin connected to PB14 */
-#endif
-#ifdef GPIOD
-    USART_DE_PIN_BUS3_PD2  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_D   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_7   ), /**< USART3 DE pin connected to PD2  */
-#endif
-#ifdef GPIOD
-    USART_DE_PIN_BUS3_PD12 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_D   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_7   ), /**< USART3 DE pin connected to PD12 */
-#endif
+    USART_DE_PIN_BUS3_PA15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_A   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_7   ), /**< USART3 DE pin connected to PA15  */
+    USART_DE_PIN_BUS3_PB1   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_7   ), /**< USART3 DE pin connected to PB1   */
+    USART_DE_PIN_BUS3_PB14  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_14  , GPIO_ALT_FUNC_7   ), /**< USART3 DE pin connected to PB14  */
+    USART_DE_PIN_BUS3_PD2   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_D   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_7   ), /**< USART3 DE pin connected to PD2   */
+    USART_DE_PIN_BUS3_PD12  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_D   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_7   ), /**< USART3 DE pin connected to PD12  */
 #endif
 
 #ifdef UART4
-#ifdef GPIOA
-    USART_DE_PIN_BUS4_PA15 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_A   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_8   ), /**< UART4 DE pin connected to PA15  */
-#endif
+    USART_DE_PIN_BUS4_PA15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_A   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_8   ), /**< UART4 DE pin connected to PA15  */
 #endif
 
 #ifdef UART5
-#ifdef GPIOB
-    USART_DE_PIN_BUS5_PB4  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_B   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_8   ), /**< UART5 DE pin connected to PB4   */
-#endif
+    USART_DE_PIN_BUS5_PB4   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_B   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_8   ), /**< UART5 DE pin connected to PB4   */
 #endif
 
 #ifdef USART6
-#ifdef GPIOD
-    USART_DE_PIN_BUS6_PD15 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_D   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_7   ), /**< USART6 DE pin connected to PD15 */
+#if !defined( STM32U535xx ) && \
+    !defined( STM32U545xx ) && \
+    !defined( STM32U575xx ) && \
+    !defined( STM32U585xx )
+    USART_DE_PIN_BUS6_PD15  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_D   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_7   ), /**< USART6 DE pin connected to PD15  */
+    USART_DE_PIN_BUS6_PE4   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_E   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART6 DE pin connected to PE4   */
 #endif
-#ifdef GPIOE
-    USART_DE_PIN_BUS6_PE4  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_E   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART6 DE pin connected to PE4  */
+#if defined( STM32U595xx ) || \
+    defined( STM32U599xx ) || \
+    defined( STM32U5A5xx ) || \
+    defined( STM32U5A9xx ) || \
+    defined( STM32U5F9xx ) || \
+    defined( STM32U5G9xx )
+    USART_DE_PIN_BUS6_PF4   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_F   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART6 DE pin connected to PF4   */
 #endif
-#ifdef GPIOF
-    USART_DE_PIN_BUS6_PF4  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_F   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART6 DE pin connected to PF4  */
-#endif
-#ifdef GPIOJ
-    USART_DE_PIN_BUS6_PJ5  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_J   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_7   ), /**< USART6 DE pin connected to PJ5  */
+#if defined( STM32U599xx ) || \
+    defined( STM32U5A9xx ) || \
+    defined( STM32U5F9xx ) || \
+    defined( STM32U5G9xx )
+    USART_DE_PIN_BUS6_PJ5   = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_J   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_7   ), /**< USART6 DE pin connected to PJ5   */
 #endif
 #endif
 
-    USART_DE_PIN_UNUSED    = USART_PIN_BIT_MASK_ENCODE( USART_BUS_CNT , GPIO_PORT_CNT , GPIO_PIN_ID_CNT , GPIO_ALT_FUNC_CNT ), /**< Identification of unused pin    */
+    USART_DE_PIN_UNUSED     = USART_PIN_BIT_MASK_ENCODE( USART_BUS_CNT , GPIO_PORT_CNT , GPIO_PIN_ID_CNT , GPIO_ALT_FUNC_CNT ), /**< Identification of unused pin    */
 }   usart_DePin_t;
+
+
+/** \brief List of Clear To Send (CTS) pins available for USART/UART peripherals (input of the hardware flow control) */
+typedef enum
+{
+    USART_CTS_PIN_BUS1_PA11 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_7   ), /**< USART1 CTS pin connected to PA11 */
+    USART_CTS_PIN_BUS1_PB4  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_B   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART1 CTS pin connected to PB4 */
+#if !defined(STM32U5F7xx) && \
+    !defined(STM32U5G7xx)
+    USART_CTS_PIN_BUS1_PG11 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_G   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_7   ), /**< USART1 CTS pin connected to PG11 */
+#endif
+
+#if defined(USART2)
+    USART_CTS_PIN_BUS2_PA0  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_7   ), /**< USART2 CTS pin connected to PA0 */
+    USART_CTS_PIN_BUS2_PD3  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_D   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART2 CTS pin connected to PD3 */
+#endif /* USART2 */
+
+    USART_CTS_PIN_BUS3_PA6  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_A   , GPIO_PIN_ID_6   , GPIO_ALT_FUNC_7   ), /**< USART3 CTS pin connected to PA6 */
+    USART_CTS_PIN_BUS3_PB13 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_13  , GPIO_ALT_FUNC_7   ), /**< USART3 CTS pin connected to PB13 */
+    USART_CTS_PIN_BUS3_PD11 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_D   , GPIO_PIN_ID_11  , GPIO_ALT_FUNC_7   ), /**< USART3 CTS pin connected to PD11 */
+
+    USART_CTS_PIN_BUS4_PB7  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_B   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_8   ), /**< UART4 CTS pin connected to PB7 */
+
+    USART_CTS_PIN_BUS5_PB5  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_B   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_8   ), /**< UART5 CTS pin connected to PB5 */
+
+#if defined(USART6)
+    USART_CTS_PIN_BUS6_PC0  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_C   , GPIO_PIN_ID_0   , GPIO_ALT_FUNC_7   ), /**< USART6 CTS pin connected to PC0 */
+    USART_CTS_PIN_BUS6_PD13 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_D   , GPIO_PIN_ID_13  , GPIO_ALT_FUNC_7   ), /**< USART6 CTS pin connected to PD13 */
+    USART_CTS_PIN_BUS6_PE3  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_E   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART6 CTS pin connected to PE3 */
+#if !defined(STM32U5F7xx) && \
+    !defined(STM32U5G7xx)
+    USART_CTS_PIN_BUS6_PF3  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_F   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART6 CTS pin connected to PF3 */
+#endif
+#if defined(STM32U599xx) || \
+    defined(STM32U5A9xx) || \
+    defined(STM32U5F9xx) || \
+    defined(STM32U5G9xx)
+    USART_CTS_PIN_BUS6_PJ7  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_J   , GPIO_PIN_ID_7   , GPIO_ALT_FUNC_7   ), /**< USART6 CTS pin connected to PJ7 */
+#endif
+#endif /* USART6 */
+
+    USART_CTS_PIN_UNUSED    = USART_PIN_BIT_MASK_ENCODE( USART_BUS_CNT , GPIO_PORT_CNT , GPIO_PIN_ID_CNT , GPIO_ALT_FUNC_CNT ), /**< Identification of unused pin */
+}   usart_CtsPin_t;
+
+
+/**
+ * \brief List of Request To Send (RTS) pins available for USART/UART peripherals (output of the hardware flow control)
+ *
+ * The pads and alternate functions are the same as of the Driver Enable pins (\ref usart_DePin_t).
+ */
+typedef enum
+{
+    USART_RTS_PIN_BUS1_PA12 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_A   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_7   ), /**< USART1 RTS pin connected to PA12 */
+    USART_RTS_PIN_BUS1_PB3  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_B   , GPIO_PIN_ID_3   , GPIO_ALT_FUNC_7   ), /**< USART1 RTS pin connected to PB3 */
+#if !defined(STM32U5F7xx) && \
+    !defined(STM32U5G7xx)
+    USART_RTS_PIN_BUS1_PG12 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_1   , GPIO_PORT_G   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_7   ), /**< USART1 RTS pin connected to PG12 */
+#endif
+
+#if defined(USART2)
+    USART_RTS_PIN_BUS2_PA1  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_A   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_7   ), /**< USART2 RTS pin connected to PA1 */
+    USART_RTS_PIN_BUS2_PD4  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_2   , GPIO_PORT_D   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART2 RTS pin connected to PD4 */
+#endif /* USART2 */
+
+    USART_RTS_PIN_BUS3_PA15 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_A   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_7   ), /**< USART3 RTS pin connected to PA15 */
+    USART_RTS_PIN_BUS3_PB1  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_1   , GPIO_ALT_FUNC_7   ), /**< USART3 RTS pin connected to PB1 */
+    USART_RTS_PIN_BUS3_PB14 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_B   , GPIO_PIN_ID_14  , GPIO_ALT_FUNC_7   ), /**< USART3 RTS pin connected to PB14 */
+    USART_RTS_PIN_BUS3_PD2  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_D   , GPIO_PIN_ID_2   , GPIO_ALT_FUNC_7   ), /**< USART3 RTS pin connected to PD2 */
+    USART_RTS_PIN_BUS3_PD12 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_3   , GPIO_PORT_D   , GPIO_PIN_ID_12  , GPIO_ALT_FUNC_7   ), /**< USART3 RTS pin connected to PD12 */
+
+    USART_RTS_PIN_BUS4_PA15 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_4   , GPIO_PORT_A   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_8   ), /**< UART4 RTS pin connected to PA15 */
+
+    USART_RTS_PIN_BUS5_PB4  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_5   , GPIO_PORT_B   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_8   ), /**< UART5 RTS pin connected to PB4 */
+
+#if defined(USART6)
+    USART_RTS_PIN_BUS6_PD15 = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_D   , GPIO_PIN_ID_15  , GPIO_ALT_FUNC_7   ), /**< USART6 RTS pin connected to PD15 */
+    USART_RTS_PIN_BUS6_PE4  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_E   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART6 RTS pin connected to PE4 */
+#if !defined(STM32U5F7xx) && \
+    !defined(STM32U5G7xx)
+    USART_RTS_PIN_BUS6_PF4  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_F   , GPIO_PIN_ID_4   , GPIO_ALT_FUNC_7   ), /**< USART6 RTS pin connected to PF4 */
+#endif
+#if defined(STM32U599xx) || \
+    defined(STM32U5A9xx) || \
+    defined(STM32U5F9xx) || \
+    defined(STM32U5G9xx)
+    USART_RTS_PIN_BUS6_PJ5  = USART_PIN_BIT_MASK_ENCODE( USART_BUS_6   , GPIO_PORT_J   , GPIO_PIN_ID_5   , GPIO_ALT_FUNC_7   ), /**< USART6 RTS pin connected to PJ5 */
+#endif
+#endif /* USART6 */
+
+    USART_RTS_PIN_UNUSED    = USART_PIN_BIT_MASK_ENCODE( USART_BUS_CNT , GPIO_PORT_CNT , GPIO_PIN_ID_CNT , GPIO_ALT_FUNC_CNT ), /**< Identification of unused pin */
+}   usart_RtsPin_t;
 
 
 /** \brief USART data word width */
@@ -557,16 +648,6 @@ typedef enum
 }   usart_IrqList_t;
 
 
-/** Data transfer handling style enumeration */
-typedef enum
-{
-    USART_TRANSFER_BLOCKING = 0u, /**< Blocking style is used for data transfer. */
-    USART_TRANSFER_INTERRUPT,     /**< Interrupts are used for data transfer.    */
-    USART_TRANSFER_DMA,           /**< DMA is used for data transfer             */
-    USART_TRANSFER_CNT
-}   usart_TransferStyle_t;
-
-
 /** DMA peripherals enumeration list */
 typedef enum
 {
@@ -583,23 +664,23 @@ typedef enum
 /** Enumeration of available channels for all DMA peripherals */
 typedef enum
 {
-    USART_DMA_CHANNEL_0  = GPDMA_CHANNEL_0,  /**< DMA transfer channel 0 (FIFO size 8 bytes) linear addressing mode         */
-    USART_DMA_CHANNEL_1  = GPDMA_CHANNEL_1,  /**< DMA transfer channel 1 (FIFO size 8 bytes) linear addressing mode         */
-    USART_DMA_CHANNEL_2  = GPDMA_CHANNEL_2,  /**< DMA transfer channel 2 (FIFO size 8 bytes) linear addressing mode         */
-    USART_DMA_CHANNEL_3  = GPDMA_CHANNEL_3,  /**< DMA transfer channel 3 (FIFO size 8 bytes) linear addressing mode         */
-    USART_DMA_CHANNEL_4  = GPDMA_CHANNEL_4,  /**< DMA transfer channel 4 (FIFO size 8 bytes) linear addressing mode         */
-    USART_DMA_CHANNEL_5  = GPDMA_CHANNEL_5,  /**< DMA transfer channel 5 (FIFO size 8 bytes) linear addressing mode         */
-    USART_DMA_CHANNEL_6  = GPDMA_CHANNEL_6,  /**< DMA transfer channel 6 (FIFO size 8 bytes) linear addressing mode         */
-    USART_DMA_CHANNEL_7  = GPDMA_CHANNEL_7,  /**< DMA transfer channel 7 (FIFO size 8 bytes) linear addressing mode         */
-    USART_DMA_CHANNEL_8  = GPDMA_CHANNEL_8,  /**< DMA transfer channel 8 (FIFO size 8 bytes) linear addressing mode         */
-    USART_DMA_CHANNEL_9  = GPDMA_CHANNEL_9,  /**< DMA transfer channel 9 (FIFO size 8 bytes) linear addressing mode         */
-    USART_DMA_CHANNEL_10 = GPDMA_CHANNEL_10, /**< DMA transfer channel 10 (FIFO size 8 bytes) linear addressing mode        */
-    USART_DMA_CHANNEL_11 = GPDMA_CHANNEL_11, /**< DMA transfer channel 11 (FIFO size 8 bytes) linear addressing mode        */
-    USART_DMA_CHANNEL_12 = GPDMA_CHANNEL_12, /**< DMA transfer channel 12 (FIFO size 32 bytes) linear or 2D addressing mode */
-    USART_DMA_CHANNEL_13 = GPDMA_CHANNEL_13, /**< DMA transfer channel 13 (FIFO size 32 bytes) linear or 2D addressing mode */
-    USART_DMA_CHANNEL_14 = GPDMA_CHANNEL_14, /**< DMA transfer channel 14 (FIFO size 32 bytes) linear or 2D addressing mode */
-    USART_DMA_CHANNEL_15 = GPDMA_CHANNEL_15, /**< DMA transfer channel 15 (FIFO size 32 bytes) linear or 2D addressing mode */
-    USART_DMA_CHANNEL_CNT /*= DMA_CHANNEL_CNT*/,
+    USART_DMA_CHANNEL_0  = GPDMA_CHANNEL_0,   /**< DMA transfer channel 0 (FIFO size 8 bytes) linear addressing mode             */
+    USART_DMA_CHANNEL_1  = GPDMA_CHANNEL_1,   /**< DMA transfer channel 1 (FIFO size 8 bytes) linear addressing mode             */
+    USART_DMA_CHANNEL_2  = GPDMA_CHANNEL_2,   /**< DMA transfer channel 2 (FIFO size 8 bytes) linear addressing mode             */
+    USART_DMA_CHANNEL_3  = GPDMA_CHANNEL_3,   /**< DMA transfer channel 3 (FIFO size 8 bytes) linear addressing mode             */
+    USART_DMA_CHANNEL_4  = GPDMA_CHANNEL_4,   /**< DMA transfer channel 4 (FIFO size 8 bytes) linear addressing mode             */
+    USART_DMA_CHANNEL_5  = GPDMA_CHANNEL_5,   /**< DMA transfer channel 5 (FIFO size 8 bytes) linear addressing mode             */
+    USART_DMA_CHANNEL_6  = GPDMA_CHANNEL_6,   /**< DMA transfer channel 6 (FIFO size 8 bytes) linear addressing mode             */
+    USART_DMA_CHANNEL_7  = GPDMA_CHANNEL_7,   /**< DMA transfer channel 7 (FIFO size 8 bytes) linear addressing mode             */
+    USART_DMA_CHANNEL_8  = GPDMA_CHANNEL_8,   /**< DMA transfer channel 8 (FIFO size 8 bytes) linear addressing mode             */
+    USART_DMA_CHANNEL_9  = GPDMA_CHANNEL_9,   /**< DMA transfer channel 9 (FIFO size 8 bytes) linear addressing mode             */
+    USART_DMA_CHANNEL_10 = GPDMA_CHANNEL_10,  /**< DMA transfer channel 10 (FIFO size 8 bytes) linear addressing mode            */
+    USART_DMA_CHANNEL_11 = GPDMA_CHANNEL_11,  /**< DMA transfer channel 11 (FIFO size 8 bytes) linear addressing mode            */
+    USART_DMA_CHANNEL_12 = GPDMA_CHANNEL_12,  /**< DMA transfer channel 12 (FIFO size 32 bytes) linear or 2D addressing mode     */
+    USART_DMA_CHANNEL_13 = GPDMA_CHANNEL_13,  /**< DMA transfer channel 13 (FIFO size 32 bytes) linear or 2D addressing mode     */
+    USART_DMA_CHANNEL_14 = GPDMA_CHANNEL_14,  /**< DMA transfer channel 14 (FIFO size 32 bytes) linear or 2D addressing mode     */
+    USART_DMA_CHANNEL_15 = GPDMA_CHANNEL_15,  /**< DMA transfer channel 15 (FIFO size 32 bytes) linear or 2D addressing mode     */
+    USART_DMA_CHANNEL_CNT                    /**< Count of available DMA channels                                          */
 }   usart_DmaChannelId_t;
 
 
@@ -613,52 +694,116 @@ typedef enum
 }   usart_DmaPriority_t;
 
 
-/** Receive register Not Empty (RxNe) interrupt callback. Received data are given as parameter. */
-typedef void ( usart_RxNeIrqCallback_t )( uint16_t rxData );
-/** Error (Err) interrupt callback. Error ID is given as parameter. */
-typedef void ( usart_ErrIrqCallback_t )( usart_Error_t errMask );
-/** Receive register Not Empty (RxNe) interrupt callback */
-typedef void ( usart_TxeIrqCallback_t )( void );
-/** Transmit Complete (Tc) interrupt callback */
-typedef void ( usart_TcIrqCallback_t )( void );
-/** Idle line detected (IdleNe) interrupt callback */
-typedef void ( usart_IdleIrqCallback_t )( void );
-/** Receiver Timeout detection (RxTimeout) interrupt callback */
-typedef void ( usart_RxTimeoutIrqCallback_t )( void );
+/* -------------------------------------------------------------------------- */
+/* ---------------------- Data handling configuration ----------------------- */
+/* -------------------------------------------------------------------------- */
 
-typedef void (usart_DmaCallback)(void);
-
+/**
+ * \brief List of data transfer modes (selected separately for transmission and reception)
+ *
+ * All modes use the same buffers and report the same events through the same callbacks - they
+ * differ only in the context moving the data:
+ * - DMA:  GPDMA channel (callbacks from GPDMA / USART interrupt)
+ * - ISR:  USART interrupt service routine (callbacks from USART interrupt)
+ * - POLL: Usart_Task() polling USART flags (callbacks from Usart_Task() context)
+ */
 typedef enum
 {
-    USART_DMA_ERROR_TRANSFER      = GPDMA_ERROR_TRANSFER     , /**< Error during transfer             */
-    USART_DMA_ERROR_CONFIG_UPDATE = GPDMA_ERROR_CONFIG_UPDATE, /**< Error during configuration update */
-    USART_DMA_ERROR_CONFIG_ERROR  = GPDMA_ERROR_CONFIG_ERROR , /**< Error in transfer configuration   */
-    USART_DMA_ERROR_TRIG_OVERRUN  = GPDMA_ERROR_TRIG_OVERRUN , /**< Trigger overrun error             */
-}   usart_DmaErrId_t;
+    USART_XFER_MODE_NONE = 0u, /**< Direction is not used by data handling                        */
+    USART_XFER_MODE_DMA,       /**< Data are transferred by DMA                                   */
+    USART_XFER_MODE_ISR,       /**< Data are transferred by USART interrupt service routine       */
+    USART_XFER_MODE_POLL,      /**< Data are transferred by Usart_Task() (polling of USART flags) */
+    USART_XFER_MODE_CNT        /**< Count of data transfer modes                                  */
+}   usart_XferMode_t;
 
-typedef void (usart_DmaErrCallback_t)(usart_DmaErrId_t);
+
+/** \brief List of receive buffer handling modes */
+typedef enum
+{
+    USART_BUFFER_MODE_ONE_SHOT = 0u, /**< Reception stops when the buffer is full or the message ended */
+    USART_BUFFER_MODE_CIRCULAR,      /**< Reception continues from the buffer start when it is full   */
+    USART_BUFFER_MODE_CNT            /**< Count of buffer modes                                        */
+}   usart_BufferMode_t;
 
 
+/** \brief List of end of received message detection methods */
+typedef enum
+{
+    USART_RX_END_NONE = 0u, /**< End of message is not detected (buffer size driven reception)      */
+    USART_RX_END_IDLE,      /**< Idle line (one frame without activity) after received data          */
+    USART_RX_END_TIMEOUT,   /**< Receiver timeout (RxTimeoutValue bits without activity) - RTO must be
+                                 enabled by \ref usart_BusConfig_t RxTimeoutValue                   */
+    USART_RX_END_CNT        /**< Count of end of message detection methods                           */
+}   usart_RxEndMode_t;
+
+
+/** \brief List of data transfer errors reported through \ref usart_XferErrCallback_t */
+typedef enum
+{
+    USART_XFER_ERROR_PARITY = 0u,        /**< Parity error (PE)                                   */
+    USART_XFER_ERROR_FRAMING,            /**< Framing error (FE)                                  */
+    USART_XFER_ERROR_NOISE,              /**< Noise detected (NE)                                 */
+    USART_XFER_ERROR_OVERRUN,            /**< Overrun - received data were not read in time (ORE) */
+    USART_XFER_ERROR_DMA_TRANSFER,       /**< DMA transfer error (bus error during transfer)      */
+    USART_XFER_ERROR_DMA_CONFIG,         /**< DMA configuration error                             */
+    USART_XFER_ERROR_DMA_CONFIG_UPDATE,  /**< DMA configuration (linked list) update error        */
+    USART_XFER_ERROR_DMA_TRIGGER_OVERRUN,/**< DMA trigger overrun                                 */
+    USART_XFER_ERROR_CNT                 /**< Count of data transfer errors                       */
+}   usart_XferErrorId_t;
+
+
+/** \brief Data transfer event callback (transmission complete, receive buffer half / full) */
+typedef void ( usart_XferCallback_t )( void );
+
+/** \brief End of received message callback, count of received bytes in RxBuffer is given as parameter */
+typedef void ( usart_RxEndCallback_t )( usart_RxDataCnt_t rxCnt );
+
+/** \brief Data transfer error callback, error identification is given as parameter */
+typedef void ( usart_XferErrCallback_t )( usart_XferErrorId_t errorId );
+
+
+/**
+ * \brief Data handling configuration (common for DMA, ISR and POLL mode)
+ *
+ * Transmission and reception use independent modes. Callback events (equal in all modes):
+ * - TxCompleteCallback: all bytes given to Usart_Set_TxStart() were transmitted (last stop bit
+ *                       sent - transmission complete flag)
+ * - RxHalfCallback:     RxBufferSize / 2 bytes were stored into RxBuffer
+ * - RxCompleteCallback: RxBufferSize bytes were stored into RxBuffer (in circular mode the next
+ *                       byte is stored to RxBuffer[ 0 ])
+ * - RxEndCallback:      end of message detected (RxEndMode), parameter is count of bytes stored in
+ *                       RxBuffer from the reception start (one shot) / write position (circular)
+ * - ErrorCallback:      reception error or DMA error (\ref usart_XferErrorId_t)
+ *
+ * In one shot buffer mode the reception stops when the buffer is full or the end of message is
+ * detected and is restarted by Usart_Set_RxStart(). Unused callback shall be set to
+ * USART_NULL_PTR. DMA identifications / priorities are used only in USART_XFER_MODE_DMA of the
+ * given direction, IrqPriority is used if any direction uses DMA or ISR mode.
+ *
+ * \note  Data are handled as 8-bit values (usart_TxData_t / usart_RxData_t) - 9-bit frames
+ *        without parity are not supported.
+ */
 typedef struct
 {
-    /* Reception configuration. If unused set TxDmaPeriphId to USART_DMA_PERIPH_CNT */
-    usart_DmaPeriphId_t           TxDmaPeriphId;        /**< DMA peripheral identification used for data transmission */
-    usart_DmaChannelId_t          TxDmaChannelId;       /**< DMA channel identification used for data transmission */
-    usart_DmaPriority_t           TxDmaPriority;
-
-    usart_DmaCallback            *TxTransferCompleteCallback;
-    usart_DmaCallback            *TxHalfTransferCallback;
-    usart_DmaErrCallback_t       *TxErrorCallback;
-
-    /* Reception configuration. If unused set RxDmaPeriphId to USART_DMA_PERIPH_CNT */
-    usart_DmaPeriphId_t           RxDmaPeriphId;        /**< DMA peripheral identification used for data reception */
-    usart_DmaChannelId_t          RxDmaChannelId;       /**< DMA channel identification used for data reception */
-    usart_DmaPriority_t           RxDmaPriority;
-
-    usart_DmaCallback            *RxTransferCompleteCallback;
-    usart_DmaCallback            *RxHalfTransferCallback;
-    usart_DmaErrCallback_t       *RxErrorCallback;
-}   usart_DmaConfig_t;
+    usart_XferMode_t          TxMode;             /**< Transmission mode (NONE / DMA / ISR / POLL)                    */
+    usart_XferMode_t          RxMode;             /**< Reception mode (NONE / DMA / ISR / POLL)                       */
+    usart_RxData_t           *RxBuffer;           /**< Receive buffer (reception used). Must stay valid.              */
+    usart_RxDataCnt_t         RxBufferSize;       /**< Receive buffer size in bytes (> 0)                             */
+    usart_BufferMode_t        RxBufferMode;       /**< One shot / circular receive buffer                             */
+    usart_RxEndMode_t         RxEndMode;          /**< End of received message detection                              */
+    usart_DmaPeriphId_t       TxDmaPeriphId;      /**< DMA peripheral (transmission in DMA mode)                      */
+    usart_DmaChannelId_t      TxDmaChannelId;     /**< DMA channel (transmission in DMA mode)                         */
+    usart_DmaPriority_t       TxDmaPriority;      /**< DMA channel priority (transmission in DMA mode)                */
+    usart_DmaPeriphId_t       RxDmaPeriphId;      /**< DMA peripheral (reception in DMA mode)                         */
+    usart_DmaChannelId_t      RxDmaChannelId;     /**< DMA channel (reception in DMA mode)                            */
+    usart_DmaPriority_t       RxDmaPriority;      /**< DMA channel priority (reception in DMA mode)                   */
+    usart_IrqPrio_t           IrqPriority;        /**< USART interrupt priority (DMA / ISR mode)                      */
+    usart_XferCallback_t     *TxCompleteCallback; /**< Transmission complete. USART_NULL_PTR if not used.             */
+    usart_XferCallback_t     *RxHalfCallback;     /**< Receive buffer half filled. USART_NULL_PTR if not used.        */
+    usart_XferCallback_t     *RxCompleteCallback; /**< Receive buffer filled. USART_NULL_PTR if not used.             */
+    usart_RxEndCallback_t    *RxEndCallback;      /**< End of received message. USART_NULL_PTR if not used.          */
+    usart_XferErrCallback_t  *ErrorCallback;      /**< Data transfer error. USART_NULL_PTR if not used.               */
+}   usart_DataConfig_t;
 
 
 /** \brief USART/UART bus configuration structure */
@@ -679,21 +824,13 @@ typedef struct
     usart_RxPinLevel_t            RxPinOperationLevels; /**< Receive pin operation mode. Can be normal or using inverted logical levels */
     usart_TxPinLevel_t            TxPinOperationLevels; /**< Transmit pin operation mode. Can be normal or using inverted logical levels */
 
-    usart_TransferStyle_t         OperationMode;
-
-    usart_DmaConfig_t            *DmaConfiguration;
-
-    usart_IrqPrio_t               IrqPriority;          /**< Interrupt Request (IRQ) priority */
-    usart_RxNeIrqCallback_t      *RxNotEmpty_ISR;       /**< Receive Buffer Not Empty (a byte has arrived) interrupt handler */
-    usart_TxeIrqCallback_t       *TransmitEmpty_ISR;    /**< Transmit Buffer Empty interrupt handler */
-    usart_TcIrqCallback_t        *TransferComplete_ISR; /**< Transmit Complete (a byte transmit finished) interrupt handler */
-    usart_ErrIrqCallback_t       *Error_ISR;            /**< Receiver/Transmitter error handler */
-    usart_IdleIrqCallback_t      *Idle_ISR;             /**< IDLE state handler */
-    usart_RxTimeoutIrqCallback_t *RxTimeout_ISR;        /**< Receive timeout detected interrupt handler */
+    const usart_DataConfig_t     *DataConfig;           /**< Data handling configuration (copied). USART_NULL_PTR - data handling is not initialized */
 
     usart_RxPin_t                 BusRxPin;             /**< RX GPIO pin used by peripheral                 */
     usart_TxPin_t                 BusTxPin;             /**< TX GPIO pin used by peripheral                 */
     usart_DePin_t                 BusDePin;             /**< Driver Enable (DE) GPIO pin used by peripheral */
+    usart_CtsPin_t                BusCtsPin;            /**< Clear To Send (CTS) GPIO pin of the hardware flow control used by peripheral  */
+    usart_RtsPin_t                BusRtsPin;            /**< Request To Send (RTS) GPIO pin of the hardware flow control used by peripheral */
 }   usart_BusConfig_t;
 
 
