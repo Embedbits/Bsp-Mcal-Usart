@@ -109,8 +109,8 @@ typedef struct
 
 /* ======================== FORWARD DECLARATIONS ============================ */
 
-static usart_RequestState_t Usart_Dma_Get_Stream      ( usart_PeriphId_t usartId, usart_DmaDir_t dmaDir, usart_DmaPeriphId_t dmaId, usart_DmaChannelId_t streamId, dma_PeriphReqId_t * const channelSel );
-static usart_RequestState_t Usart_Dma_Check_Stream    ( usart_PeriphId_t usartId, usart_DmaDir_t dmaDir, usart_DmaPeriphId_t dmaId, usart_DmaChannelId_t streamId, usart_DmaPriority_t priority );
+static usart_RequestState_t Usart_Dma_Get_Stream      ( usart_PeriphId_t usartId, usart_DmaDir_t dmaDir, usart_DmaCode_t dmaCode, dma_PeriphReqId_t * const channelSel );
+static usart_RequestState_t Usart_Dma_Check_Stream    ( usart_PeriphId_t usartId, usart_DmaDir_t dmaDir, usart_DmaCode_t dmaCode, usart_DmaPriority_t priority );
 static usart_RequestState_t Usart_Dma_Set_ChannelInit ( usart_PeriphId_t usartId, usart_DmaDir_t dmaDir );
 static usart_RequestState_t Usart_Dma_Set_ChannelOff  ( usart_PeriphId_t usartId, usart_DmaDir_t dmaDir );
 static usart_RequestState_t Usart_Dma_Set_Transfer    ( usart_PeriphId_t usartId, usart_DmaDir_t dmaDir );
@@ -154,7 +154,8 @@ USART_DMA_DECLARE_HANDLERS( Uart8 );
 
 /**
  * \brief DMA streams of USART requests (RM0090 / RM0368 / RM0383 / RM0390 DMA request mapping,
- *        streams common for all STM32F4 devices with the peripheral)
+ *        STM32CubeMX database; USART2_RX on DMA1 stream 7 and the channel selection of UART5_TX
+ *        depend on the device line)
  */
 static const usart_DmaPeriphConfig_t usart_DmaPeriphConfig[ ] =
 {
@@ -165,7 +166,21 @@ static const usart_DmaPeriphConfig_t usart_DmaPeriphConfig[ ] =
 #endif /* USART1 */
 #ifdef USART2
     { .TxStream = { { DMA_PERIPH_1, DMA_STREAM_6, DMA_REQ_CHANNEL_4 }, { DMA_PERIPH_1, DMA_STREAM_6, DMA_REQ_CHANNEL_4 } },
-      .RxStream = { { DMA_PERIPH_1, DMA_STREAM_5, DMA_REQ_CHANNEL_4 }, { DMA_PERIPH_1, DMA_STREAM_5, DMA_REQ_CHANNEL_4 } },
+      .RxStream = { { DMA_PERIPH_1, DMA_STREAM_5, DMA_REQ_CHANNEL_4 },
+#if defined(STM32F410Cx) || \
+    defined(STM32F410Rx) || \
+    defined(STM32F410Tx) || \
+    defined(STM32F412Cx) || \
+    defined(STM32F412Rx) || \
+    defined(STM32F412Vx) || \
+    defined(STM32F412Zx) || \
+    defined(STM32F411xE) || \
+    defined(STM32F413xx) || \
+    defined(STM32F423xx)
+                    { DMA_PERIPH_1, DMA_STREAM_7, DMA_REQ_CHANNEL_6 } },
+#else
+                    { DMA_PERIPH_1, DMA_STREAM_5, DMA_REQ_CHANNEL_4 } },
+#endif
       USART_DMA_ISR_CONFIG( Usart2 ) },
 #endif /* USART2 */
 #ifdef USART3
@@ -179,7 +194,12 @@ static const usart_DmaPeriphConfig_t usart_DmaPeriphConfig[ ] =
       USART_DMA_ISR_CONFIG( Uart4 ) },
 #endif /* UART4 */
 #ifdef UART5
+#if defined(STM32F413xx) || \
+    defined(STM32F423xx)
+    { .TxStream = { { DMA_PERIPH_1, DMA_STREAM_7, DMA_REQ_CHANNEL_8 }, { DMA_PERIPH_1, DMA_STREAM_7, DMA_REQ_CHANNEL_8 } },
+#else
     { .TxStream = { { DMA_PERIPH_1, DMA_STREAM_7, DMA_REQ_CHANNEL_4 }, { DMA_PERIPH_1, DMA_STREAM_7, DMA_REQ_CHANNEL_4 } },
+#endif
       .RxStream = { { DMA_PERIPH_1, DMA_STREAM_0, DMA_REQ_CHANNEL_4 }, { DMA_PERIPH_1, DMA_STREAM_0, DMA_REQ_CHANNEL_4 } },
       USART_DMA_ISR_CONFIG( Uart5 ) },
 #endif /* UART5 */
@@ -214,9 +234,9 @@ static usart_DmaChannelState_t usart_DmaChannelState[ USART_BUS_CNT ][ USART_DMA
  * \param usartId    [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
  * \param dataConfig [in]: Pointer to data handling configuration. Must not be NULL.
  *
- * \return Returns \ref USART_REQUEST_OK if the stream is connected to the transmit request, the
- *         priority is valid and the stream differs from the reception DMA stream. Otherwise
- *         returns \ref USART_REQUEST_ERROR.
+ * \return Returns \ref USART_REQUEST_OK if the stream is an item of the list \ref usart_TxDma_t of
+ *         the bus (the stream connected to the transmit request) and the priority is valid.
+ *         Otherwise returns \ref USART_REQUEST_ERROR.
  */
 usart_RequestState_t Usart_Dma_Check_TxConfig( usart_PeriphId_t usartId, const usart_DataConfig_t * const dataConfig )
 {
@@ -225,19 +245,7 @@ usart_RequestState_t Usart_Dma_Check_TxConfig( usart_PeriphId_t usartId, const u
     if( ( USART_BUS_CNT   > usartId    ) &&
         ( USART_NULL_PTR != dataConfig )    )
     {
-        retState = Usart_Dma_Check_Stream( usartId, USART_DMA_DIR_TX, dataConfig->TxDmaPeriphId, dataConfig->TxDmaChannelId, dataConfig->TxDmaPriority );
-
-        /* Transmission and reception must not share one DMA stream */
-        if( ( USART_XFER_MODE_DMA        == dataConfig->RxMode         ) &&
-            ( dataConfig->TxDmaPeriphId  == dataConfig->RxDmaPeriphId  ) &&
-            ( dataConfig->TxDmaChannelId == dataConfig->RxDmaChannelId )    )
-        {
-            retState = USART_REQUEST_ERROR;
-        }
-        else
-        {
-            /* Streams of the directions differ */
-        }
+        retState = Usart_Dma_Check_Stream( usartId, USART_DMA_DIR_TX, (usart_DmaCode_t)dataConfig->TxDma, dataConfig->TxDmaPriority );
     }
     else
     {
@@ -372,8 +380,9 @@ usart_RequestState_t Usart_Dma_TxStop( usart_PeriphId_t usartId )
  * \param usartId    [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
  * \param dataConfig [in]: Pointer to data handling configuration. Must not be NULL.
  *
- * \return Returns \ref USART_REQUEST_OK if the stream is connected to the receive request and
- *         the priority is valid (buffer is checked by Usart.c, DMA data count limit equals the
+ * \return Returns \ref USART_REQUEST_OK if the stream is an item of the list \ref usart_RxDma_t of the
+ *         bus (the stream connected to the receive request) and the priority is valid
+ *         (buffer is checked by Usart.c, DMA data count limit equals the
  *         usart_RxDataCnt_t range). Otherwise returns \ref USART_REQUEST_ERROR.
  */
 usart_RequestState_t Usart_Dma_Check_RxConfig( usart_PeriphId_t usartId, const usart_DataConfig_t * const dataConfig )
@@ -383,7 +392,7 @@ usart_RequestState_t Usart_Dma_Check_RxConfig( usart_PeriphId_t usartId, const u
     if( ( USART_BUS_CNT   > usartId    ) &&
         ( USART_NULL_PTR != dataConfig )    )
     {
-        retState = Usart_Dma_Check_Stream( usartId, USART_DMA_DIR_RX, dataConfig->RxDmaPeriphId, dataConfig->RxDmaChannelId, dataConfig->RxDmaPriority );
+        retState = Usart_Dma_Check_Stream( usartId, USART_DMA_DIR_RX, (usart_DmaCode_t)dataConfig->RxDma, dataConfig->RxDmaPriority );
     }
     else
     {
@@ -586,32 +595,37 @@ usart_RequestState_t Usart_Dma_Get_RxCount( usart_PeriphId_t usartId, usart_RxDa
 /**
  * \brief Looks up DMA stream connected to the USART request
  *
+ * The DMA peripheral and the stream are decoded from the item of the DMA stream list, the item has to
+ * belong to the bus.
+ *
  * \param usartId     [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
  * \param dmaDir      [in]: Data transfer direction
- * \param dmaId       [in]: DMA peripheral, value from \ref usart_DmaPeriphId_t
- * \param streamId    [in]: DMA stream, value from \ref usart_DmaChannelId_t
+ * \param dmaCode     [in]: Item of \ref usart_TxDma_t / \ref usart_RxDma_t (encoded DMA stream)
  * \param channelSel [out]: Pointer to store channel selection of the stream. Must not be NULL.
  *
  * \return Returns \ref USART_REQUEST_OK if the stream is connected to the request. Otherwise
  *         returns \ref USART_REQUEST_ERROR.
  */
-static usart_RequestState_t Usart_Dma_Get_Stream( usart_PeriphId_t usartId, usart_DmaDir_t dmaDir, usart_DmaPeriphId_t dmaId, usart_DmaChannelId_t streamId, dma_PeriphReqId_t * const channelSel )
+static usart_RequestState_t Usart_Dma_Get_Stream( usart_PeriphId_t usartId, usart_DmaDir_t dmaDir, usart_DmaCode_t dmaCode, dma_PeriphReqId_t * const channelSel )
 {
     usart_RequestState_t retState = USART_REQUEST_ERROR;
 
     if( ( USART_BUS_CNT         > usartId    ) &&
         ( USART_DMA_DIR_CNT     > dmaDir     ) &&
-        ( USART_DMA_PERIPH_CNT  > dmaId      ) &&
-        ( USART_DMA_CHANNEL_CNT > streamId   ) &&
         ( USART_NULL_PTR       != channelSel )    )
     {
+        const uint32_t codeBus    = USART_DMA_BIT_MASK_DECODE_PERIPH( dmaCode );
+        const uint32_t codeDmaId  = USART_DMA_BIT_MASK_DECODE_DMA( dmaCode );
+        const uint32_t codeStream = USART_DMA_BIT_MASK_DECODE_STREAM( dmaCode );
+
         const usart_DmaStream_t * const streams = ( USART_DMA_DIR_TX == dmaDir ) ? usart_DmaPeriphConfig[ usartId ].TxStream
                                                                                 : usart_DmaPeriphConfig[ usartId ].RxStream;
 
         for( uint32_t streamIdx = 0u; USART_DMA_STREAM_OPTIONS > streamIdx; streamIdx ++ )
         {
-            if( ( (dma_PeriphId_t)dmaId     == streams[ streamIdx ].DmaId    ) &&
-                ( (dma_ChannelId_t)streamId == streams[ streamIdx ].StreamId )    )
+            if( ( codeBus                    == (uint32_t)usartId           ) &&
+                ( (dma_PeriphId_t)codeDmaId  == streams[ streamIdx ].DmaId    ) &&
+                ( (dma_ChannelId_t)codeStream == streams[ streamIdx ].StreamId )    )
             {
                 *channelSel = streams[ streamIdx ].ChannelSel;
                 retState    = USART_REQUEST_OK;
@@ -637,21 +651,20 @@ static usart_RequestState_t Usart_Dma_Get_Stream( usart_PeriphId_t usartId, usar
  *
  * \param usartId  [in]: USART/UART peripheral identification, value from \ref usart_PeriphId_t
  * \param dmaDir   [in]: Data transfer direction
- * \param dmaId    [in]: DMA peripheral, value from \ref usart_DmaPeriphId_t
- * \param streamId [in]: DMA stream, value from \ref usart_DmaChannelId_t
+ * \param dmaCode  [in]: Item of \ref usart_TxDma_t / \ref usart_RxDma_t (encoded DMA stream)
  * \param priority [in]: DMA stream priority, value from \ref usart_DmaPriority_t
  *
  * \return Returns \ref USART_REQUEST_OK if the stream is connected to the request and the
  *         priority is valid. Otherwise returns \ref USART_REQUEST_ERROR.
  */
-static usart_RequestState_t Usart_Dma_Check_Stream( usart_PeriphId_t usartId, usart_DmaDir_t dmaDir, usart_DmaPeriphId_t dmaId, usart_DmaChannelId_t streamId, usart_DmaPriority_t priority )
+static usart_RequestState_t Usart_Dma_Check_Stream( usart_PeriphId_t usartId, usart_DmaDir_t dmaDir, usart_DmaCode_t dmaCode, usart_DmaPriority_t priority )
 {
     usart_RequestState_t retState   = USART_REQUEST_ERROR;
     dma_PeriphReqId_t    channelSel = DMA_REQ_CHANNEL_0;
 
     if( (uint32_t)DMA_PRIORITY_CNT > (uint32_t)priority )
     {
-        retState = Usart_Dma_Get_Stream( usartId, dmaDir, dmaId, streamId, &channelSel );
+        retState = Usart_Dma_Get_Stream( usartId, dmaDir, dmaCode, &channelSel );
     }
     else
     {
@@ -700,14 +713,12 @@ static usart_RequestState_t Usart_Dma_Set_ChannelInit( usart_PeriphId_t usartId,
         usart_DmaChannelState_t * const       chState    = &usart_DmaChannelState[ usartId ][ dmaDir ];
         dma_ConfigStruct_t                    dmaConfig;
         dma_RequestState_t                    dmaState   = DMA_REQUEST_ERROR;
-        usart_DmaPeriphId_t                   dmaId      = xferCtx->Config.TxDmaPeriphId;
-        usart_DmaChannelId_t                  streamId   = xferCtx->Config.TxDmaChannelId;
+        usart_DmaCode_t                       dmaCode    = (usart_DmaCode_t)xferCtx->Config.TxDma;
         usart_DmaPriority_t                   priority   = xferCtx->Config.TxDmaPriority;
 
         if( USART_DMA_DIR_RX == dmaDir )
         {
-            dmaId    = xferCtx->Config.RxDmaPeriphId;
-            streamId = xferCtx->Config.RxDmaChannelId;
+            dmaCode  = (usart_DmaCode_t)xferCtx->Config.RxDma;
             priority = xferCtx->Config.RxDmaPriority;
         }
         else
@@ -715,11 +726,11 @@ static usart_RequestState_t Usart_Dma_Set_ChannelInit( usart_PeriphId_t usartId,
             /* Transmit stream */
         }
 
-        retState = Usart_Dma_Get_Stream( usartId, dmaDir, dmaId, streamId, &channelSel );
+        retState = Usart_Dma_Get_Stream( usartId, dmaDir, dmaCode, &channelSel );
         dmaState = Dma_Get_DefaultConfig( &dmaConfig );
 
-        dmaConfig.DmaPeriphId          = (dma_PeriphId_t)dmaId;
-        dmaConfig.DmaChannel           = (dma_ChannelId_t)streamId;
+        dmaConfig.DmaPeriphId          = (dma_PeriphId_t)USART_DMA_BIT_MASK_DECODE_DMA( dmaCode );
+        dmaConfig.DmaChannel           = (dma_ChannelId_t)USART_DMA_BIT_MASK_DECODE_STREAM( dmaCode );
         dmaConfig.PeripheralReqId      = channelSel;
         dmaConfig.PeriphAddress        = (dma_PeriphAddr_t)(uintptr_t)&periphReg->DR;
         dmaConfig.PeriphAddrIncrement  = DMA_PERIPH_ADDR_STATIC;

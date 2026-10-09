@@ -27,19 +27,28 @@ e.g. ModBus / CRSF, use the same interface).
   standard configuration (otherwise `USART_REQUEST_ERROR`): receiver timeout (also
   `USART_RX_END_TIMEOUT`), Driver Enable (DE) and its pins / times, pin level inversion, 7-bit word.
 - UART4 / UART5 / UART7 / UART8 do not support hardware flow control and 0.5 / 1.5 stop bits.
-- DMA: `usart_DmaChannelId_t` is a DMA stream. The stream has to be connected to the USART
-  request (RM0090 request mapping), channel selection is set by the module:
+- Pins: the items of `usart_RxPin_t` / `usart_TxPin_t` / `usart_CtsPin_t` / `usart_RtsPin_t` are generated from the STM32CubeMX GPIO modes
+  database - every pin item is active on exactly the CMSIS device lines whose package or die has the
+  pin (guards by the device line).
+- DMA: `TxDma` / `RxDma` of `usart_DataConfig_t` select the DMA stream from the lists `usart_TxDma_t` /
+  `usart_RxDma_t` - one item per USART / UART bus, DMA peripheral and stream, named
+  `USART_TX_DMA_BUSx_DMAy_STREAMz` / `USART_RX_DMA_BUSx_DMAy_STREAMz` (e.g. `USART_TX_DMA_BUS2_DMA1_STREAM6`).
+  The items are the streams connected to the USART request (RM0090 request mapping, the table below), the
+  channel selection of the stream is part of the item. Items of another bus, items of the other direction
+  and `USART_TX_DMA_UNUSED` / `USART_RX_DMA_UNUSED` are refused for a direction in the DMA mode:
 
 | Peripheral | TX streams          | RX streams          |
 |------------|---------------------|---------------------|
 | USART1     | DMA2 S7             | DMA2 S2, DMA2 S5    |
-| USART2     | DMA1 S6             | DMA1 S5             |
+| USART2     | DMA1 S6             | DMA1 S5 (S7 *)      |
 | USART3     | DMA1 S3, DMA1 S4    | DMA1 S1             |
 | UART4      | DMA1 S4             | DMA1 S2             |
 | UART5      | DMA1 S7             | DMA1 S0             |
 | USART6     | DMA2 S6, DMA2 S7    | DMA2 S1, DMA2 S2    |
 | UART7      | DMA1 S1             | DMA1 S3             |
 | UART8      | DMA1 S0             | DMA1 S6             |
+
+(*) USART2_RX is served also by DMA1 stream 7 (channel selection 6) on STM32F410 / F411 / F412 / F413 / F423. UART5_TX uses the channel selection 8 on STM32F413 / F423 (4 on the other devices).
 
 - Reception flags (RXNE, PE, FE, NE, ORE, IDLE) are cleared by read of SR followed by read of DR.
   In DMA reception DR is read by the DMA stream, errors and idle line are reported from the USART
@@ -148,6 +157,11 @@ Data handling is configured by `usart_BusConfig_t::DataConfig` in `Usart_Init()`
 - `usart_RequestState_t    Usart_InitRxGpio(usart_RxPin_t pinId);`
 - `usart_RequestState_t    Usart_InitTxGpio(usart_TxPin_t pinId);`
 - `usart_RequestState_t    Usart_InitDeGpio(usart_DePin_t pinId);`
+- `usart_RequestState_t    Usart_InitCtsGpio(usart_CtsPin_t pinId);`
+- `usart_RequestState_t    Usart_InitRtsGpio(usart_RtsPin_t pinId);`
+
+The pins of the hardware flow control are configured by `BusCtsPin` (CTS input) and `BusRtsPin` (RTS output)
+of `usart_BusConfig_t` (STM32F4 has no Driver Enable output, `BusDePin` is not used).
 
 ---
 

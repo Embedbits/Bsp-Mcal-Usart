@@ -96,6 +96,24 @@ static void                 Ut_Usart_RxEndRestartCallback   ( usart_RxDataCnt_t 
 #define UT_USART_DMA_TX_STREAM              ( DMA_STREAM_6 )
 #define UT_USART_DMA_RX_STREAM              ( DMA_STREAM_5 )
 
+/** DMA stream list items of USART2 used by data handling tests (DMA1 stream 6 TX, stream 5 RX) */
+#define UT_USART_TX_DMA                     ( USART_TX_DMA_BUS2_DMA1_STREAM6 )
+#define UT_USART_RX_DMA                     ( USART_RX_DMA_BUS2_DMA1_STREAM5 )
+
+/** Encoded DMA stream from the bus, DMA peripheral index, stream number and channel selection number
+ *  (bit-fields written independently of USART_DMA_ENCODE) */
+#define UT_USART_DMA_CODE( BUS, DMA, STREAM, CHSEL )    ( ( (BUS) << 15u ) | ( (DMA) << 10u ) | ( (STREAM) << 5u ) | (CHSEL) )
+
+/** Channel selection of the UART5 transmit stream (DMA1 stream 7): 8 on STM32F413 / STM32F423, 4 on the other devices */
+#if defined(STM32F413xx) || \
+    defined(STM32F423xx)
+    #define UT_USART_UART5_TX_SEL           ( DMA_REQ_CHANNEL_8 )
+    #define UT_USART_UART5_TX_CHSEL         ( 8u )
+#else
+    #define UT_USART_UART5_TX_SEL           ( DMA_REQ_CHANNEL_4 )
+    #define UT_USART_UART5_TX_CHSEL         ( 4u )
+#endif
+
 /** UART peripheral (UART4 - not available on STM32F401 / F410 / F411 / F412) */
 #if defined(UART4)
     #define UT_UART_BUS                     ( USART_BUS_4 )
@@ -110,6 +128,11 @@ static void                 Ut_Usart_RxEndRestartCallback   ( usart_RxDataCnt_t 
 
 /** Baud rate of test configurations */
 #define UT_USART_BAUDRATE                   ( 115200u )
+
+/** USART2 TX pin of the half-duplex test (PA2 - exists on every device line), alternate function 7 */
+#define UT_USART_HDX_TX_PIN                 ( USART_TX_PIN_BUS2_PA2 )
+#define UT_USART_HDX_PORT                   ( GPIO_PORT_A )
+#define UT_USART_HDX_PIN_ID                 ( GPIO_PIN_ID_2 )
 
 /** BRR of 115200 Bd at 84 MHz, over-sampling by 16 (USARTDIV 45.5625) */
 #define UT_USART_BRR_84MHZ_OVER16           ( 0x02D9u )
@@ -271,6 +294,8 @@ void Ut_Usart_Get_DefaultConfig_FillsDefaults( void )
     TEST_ASSERT_EQUAL( USART_RX_PIN_UNUSED,        config.BusRxPin );
     TEST_ASSERT_EQUAL( USART_TX_PIN_UNUSED,        config.BusTxPin );
     TEST_ASSERT_EQUAL( USART_DE_PIN_UNUSED,        config.BusDePin );
+    TEST_ASSERT_EQUAL( USART_CTS_PIN_UNUSED,       config.BusCtsPin );
+    TEST_ASSERT_EQUAL( USART_RTS_PIN_UNUSED,       config.BusRtsPin );
 }
 
 /* ============================ INITIALIZATION ============================== */
@@ -360,12 +385,12 @@ void Ut_Usart_Init_HalfDuplex_TxPinOpenDrainAndHdselSet( void )
 {
     usart_BusConfig_t config = Ut_Usart_Get_Config();
 
-    config.BusTxPin   = USART_TX_PIN_BUS2_PD5;
+    config.BusTxPin   = UT_USART_HDX_TX_PIN;
     config.HalfDuplex = USART_HALF_DUPLEX_ACTIVE;
 
     Ut_Usart_Expect_ClockState( UT_USART_RCC, RCC_FUNCTION_ACTIVE );
     Ut_Usart_Expect_Reset( UT_USART_RCC );
-    Ut_Usart_Expect_GpioInit( GPIO_PORT_D, GPIO_PIN_ID_5, GPIO_ALT_FUNC_7, GPIO_PIN_OUTPUT_OPENDRAIN, GPIO_PIN_PULL_UP );
+    Ut_Usart_Expect_GpioInit( UT_USART_HDX_PORT, UT_USART_HDX_PIN_ID, GPIO_ALT_FUNC_7, GPIO_PIN_OUTPUT_OPENDRAIN, GPIO_PIN_PULL_UP );
     Ut_Usart_Expect_PeriphClk( UT_USART_RCC, UT_USART_CLK_HZ );
 
     TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Init( &config ) );
@@ -377,8 +402,8 @@ void Ut_Usart_Init_HalfDuplex_TxPinOpenDrainAndHdselSet( void )
 /**
  * \brief   Usart_Init() does not configure pins of other peripherals.
  *
- * \details USART2 configured with RX pin of USART1 and TX pin of USART6 (STM32H5 behavior -
- *          pin of other peripheral means "pin not used").
+ * \details USART2 configured with RX pin PB7 and TX pin PB6 of USART1 (STM32H5 behavior - pin
+ *          of other peripheral means "pin not used"; both pins exist on every device line).
  *
  * \par Expected results
  * - USART_REQUEST_OK, no GPIO initialization (strict mocks), peripheral enabled.
@@ -387,8 +412,8 @@ void Ut_Usart_Init_PinOfOtherPeriph_PinNotConfigured( void )
 {
     usart_BusConfig_t config = Ut_Usart_Get_Config();
 
-    config.BusRxPin = USART_RX_PIN_BUS1_PA10;
-    config.BusTxPin = USART_TX_PIN_BUS6_PC6;
+    config.BusRxPin = USART_RX_PIN_BUS1_PB7;
+    config.BusTxPin = USART_TX_PIN_BUS1_PB6;
 
     Ut_Usart_Expect_ClockState( UT_USART_RCC, RCC_FUNCTION_ACTIVE );
     Ut_Usart_Expect_Reset( UT_USART_RCC );
@@ -396,6 +421,91 @@ void Ut_Usart_Init_PinOfOtherPeriph_PinNotConfigured( void )
 
     TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Init( &config ) );
     TEST_ASSERT_EQUAL_HEX32( USART_CR1_UE, UT_USART_REG->CR1 & USART_CR1_UE );
+}
+
+
+/**
+ * \brief   Usart_Init() configures the CTS and RTS pins of the hardware flow control.
+ *
+ * \details USART2 with CTS pin PA0 and RTS pin PA1 (AF7; the RTS code is built by the encoding macro -
+ *          the item of the pin table does not exist on STM32F410Tx).
+ *
+ * \par Expected results
+ * - CTS pin with pull-up, RTS pin without pull, both push-pull in the alternate function mode.
+ * - USART_REQUEST_OK, peripheral enabled.
+ */
+void Ut_Usart_Init_FlowControlPins_GpioConfigured( void )
+{
+    usart_BusConfig_t config = Ut_Usart_Get_Config();
+
+    config.BusCtsPin = USART_CTS_PIN_BUS2_PA0;
+    config.BusRtsPin = (usart_RtsPin_t)USART_PIN_BIT_MASK_ENCODE( USART_BUS_2, GPIO_PORT_A, GPIO_PIN_ID_1, GPIO_ALT_FUNC_7 );
+
+    Ut_Usart_Expect_ClockState( UT_USART_RCC, RCC_FUNCTION_ACTIVE );
+    Ut_Usart_Expect_Reset( UT_USART_RCC );
+    Ut_Usart_Expect_GpioInit( GPIO_PORT_A, GPIO_PIN_ID_0, GPIO_ALT_FUNC_7, GPIO_PIN_OUTPUT_PUSHPULL, GPIO_PIN_PULL_UP );
+    Ut_Usart_Expect_GpioInit( GPIO_PORT_A, GPIO_PIN_ID_1, GPIO_ALT_FUNC_7, GPIO_PIN_OUTPUT_PUSHPULL, GPIO_PIN_PULL_NONE );
+    Ut_Usart_Expect_PeriphClk( UT_USART_RCC, UT_USART_CLK_HZ );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Init( &config ) );
+    TEST_ASSERT_EQUAL_HEX32( USART_CR1_UE, UT_USART_REG->CR1 & USART_CR1_UE );
+}
+
+
+/**
+ * \brief   Usart_Init() does not configure flow control pins of other peripherals.
+ *
+ * \details USART2 configured with CTS pin PA11 and RTS pin PA12 of USART1 (the CTS code is built by
+ *          the encoding macro - the item of the pin table does not exist on STM32F410Tx).
+ *
+ * \par Expected results
+ * - USART_REQUEST_OK, no GPIO initialization (strict mocks), peripheral enabled.
+ */
+void Ut_Usart_Init_FlowControlPinsOfOtherPeriph_PinNotConfigured( void )
+{
+    usart_BusConfig_t config = Ut_Usart_Get_Config();
+
+    config.BusCtsPin = (usart_CtsPin_t)USART_PIN_BIT_MASK_ENCODE( USART_BUS_1, GPIO_PORT_A, GPIO_PIN_ID_11, GPIO_ALT_FUNC_7 );
+    config.BusRtsPin = USART_RTS_PIN_BUS1_PA12;
+
+    Ut_Usart_Expect_ClockState( UT_USART_RCC, RCC_FUNCTION_ACTIVE );
+    Ut_Usart_Expect_Reset( UT_USART_RCC );
+    Ut_Usart_Expect_PeriphClk( UT_USART_RCC, UT_USART_CLK_HZ );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Init( &config ) );
+    TEST_ASSERT_EQUAL_HEX32( USART_CR1_UE, UT_USART_REG->CR1 & USART_CR1_UE );
+}
+
+
+/**
+ * \brief   Usart_Init() reports GPIO error of the flow control pins.
+ *
+ * \details Gpio_Init() mock returns error for the CTS pin, then for the RTS pin.
+ *
+ * \par Expected results
+ * - USART_REQUEST_ERROR, the RTS pin is not processed after the CTS pin error, peripheral not enabled.
+ */
+void Ut_Usart_Init_FlowControlPinGpioError_ReturnsErrorPeripheralNotEnabled( void )
+{
+    usart_BusConfig_t config = Ut_Usart_Get_Config();
+
+    config.BusCtsPin = USART_CTS_PIN_BUS2_PA0;
+    config.BusRtsPin = (usart_RtsPin_t)USART_PIN_BIT_MASK_ENCODE( USART_BUS_2, GPIO_PORT_A, GPIO_PIN_ID_1, GPIO_ALT_FUNC_7 );
+
+    Ut_Usart_Expect_ClockState( UT_USART_RCC, RCC_FUNCTION_ACTIVE );
+    Ut_Usart_Expect_Reset( UT_USART_RCC );
+    Gpio_Init_ExpectAnyArgsAndReturn( GPIO_REQUEST_ERROR );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Init( &config ) );
+    TEST_ASSERT_EQUAL_HEX32( 0u, UT_USART_REG->CR1 & USART_CR1_UE );
+
+    Ut_Usart_Expect_ClockState( UT_USART_RCC, RCC_FUNCTION_ACTIVE );
+    Ut_Usart_Expect_Reset( UT_USART_RCC );
+    Gpio_Init_ExpectAnyArgsAndReturn( GPIO_REQUEST_OK );
+    Gpio_Init_ExpectAnyArgsAndReturn( GPIO_REQUEST_ERROR );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Init( &config ) );
+    TEST_ASSERT_EQUAL_HEX32( 0u, UT_USART_REG->CR1 & USART_CR1_UE );
 }
 
 
@@ -1103,24 +1213,61 @@ void Ut_Usart_PinLevels_StandardOnly( void )
 /**
  * \brief   Usart_InitRxGpio() / Usart_InitTxGpio() configure pin in alternate function.
  *
- * \details USART6 RX PC7 and TX PC6 (AF8), unused pins rejected.
+ * \details USART6 RX PC7 and TX PC6 (AF8, the codes are built by the encoding macro - the items
+ *          of the pin tables do not exist on STM32F410Cx / STM32F412Cx), unused pins rejected.
  *
  * \par Expected results
  * - GPIO initialized with alternate function 8, GPIO error reported.
+ * - MCUs without USART6 (STM32F410Tx): test ignored.
  */
 void Ut_Usart_InitGpio_AlternateFunction( void )
 {
+#if defined(USART6)
+    const usart_RxPin_t rxPin = (usart_RxPin_t)USART_PIN_BIT_MASK_ENCODE( USART_BUS_6, GPIO_PORT_C, GPIO_PIN_ID_7, GPIO_ALT_FUNC_8 );
+    const usart_TxPin_t txPin = (usart_TxPin_t)USART_PIN_BIT_MASK_ENCODE( USART_BUS_6, GPIO_PORT_C, GPIO_PIN_ID_6, GPIO_ALT_FUNC_8 );
+
     Ut_Usart_Expect_GpioInit( GPIO_PORT_C, GPIO_PIN_ID_7, GPIO_ALT_FUNC_8, GPIO_PIN_OUTPUT_PUSHPULL, GPIO_PIN_PULL_UP );
-    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_InitRxGpio( USART_RX_PIN_BUS6_PC7 ) );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_InitRxGpio( rxPin ) );
 
     Ut_Usart_Expect_GpioInit( GPIO_PORT_C, GPIO_PIN_ID_6, GPIO_ALT_FUNC_8, GPIO_PIN_OUTPUT_PUSHPULL, GPIO_PIN_PULL_NONE );
-    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_InitTxGpio( USART_TX_PIN_BUS6_PC6 ) );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_InitTxGpio( txPin ) );
 
     Gpio_Init_ExpectAnyArgsAndReturn( GPIO_REQUEST_ERROR );
-    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_InitTxGpio( USART_TX_PIN_BUS6_PC6 ) );
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_InitTxGpio( txPin ) );
 
     TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_InitRxGpio( USART_RX_PIN_UNUSED ) );
     TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_InitTxGpio( USART_TX_PIN_UNUSED ) );
+#else
+    TEST_IGNORE_MESSAGE( "MCU without USART6" );
+#endif /* USART6 */
+}
+
+
+/**
+ * \brief   Usart_InitCtsGpio() / Usart_InitRtsGpio() configure pin in alternate function.
+ *
+ * \details USART2 CTS PA0 and USART1 RTS PA12 (AF7, both items exist on every device line), unused
+ *          pins rejected.
+ *
+ * \par Expected results
+ * - CTS pin initialized with pull-up, RTS pin without pull, alternate function 7, GPIO error reported.
+ */
+void Ut_Usart_InitFlowControlGpio_AlternateFunction( void )
+{
+    Ut_Usart_Expect_GpioInit( GPIO_PORT_A, GPIO_PIN_ID_0, GPIO_ALT_FUNC_7, GPIO_PIN_OUTPUT_PUSHPULL, GPIO_PIN_PULL_UP );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_InitCtsGpio( USART_CTS_PIN_BUS2_PA0 ) );
+
+    Ut_Usart_Expect_GpioInit( GPIO_PORT_A, GPIO_PIN_ID_12, GPIO_ALT_FUNC_7, GPIO_PIN_OUTPUT_PUSHPULL, GPIO_PIN_PULL_NONE );
+    TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_InitRtsGpio( USART_RTS_PIN_BUS1_PA12 ) );
+
+    Gpio_Init_ExpectAnyArgsAndReturn( GPIO_REQUEST_ERROR );
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_InitCtsGpio( USART_CTS_PIN_BUS2_PA0 ) );
+
+    Gpio_Init_ExpectAnyArgsAndReturn( GPIO_REQUEST_ERROR );
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_InitRtsGpio( USART_RTS_PIN_BUS1_PA12 ) );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_InitCtsGpio( USART_CTS_PIN_UNUSED ) );
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_InitRtsGpio( USART_RTS_PIN_UNUSED ) );
 }
 
 /* ============================= DATA ACCESS ================================ */
@@ -1404,11 +1551,11 @@ void Ut_Usart_Set_DataConfig_TimeoutEnd_Error( void )
 
 
 /**
- * \brief   Usart_Set_DataConfig() rejects DMA streams not connected to the USART requests.
+ * \brief   Usart_Set_DataConfig() rejects DMA streams out of the DMA stream lists.
  *
- * \details DMA mode USART2: same stream for TX and RX, TX stream of other request (DMA1 S5),
- *          RX stream of other DMA (DMA2 S5), stream and peripheral out of range, invalid
- *          priority.
+ * \details DMA mode USART2: unused streams, the transmit stream item in the receive member and
+ *          the other way, the stream items of USART1 (DMA2 S7, DMA2 S5), stream and DMA
+ *          peripheral out of range, invalid priority.
  *
  * \par Expected results
  * - USART_REQUEST_ERROR in all cases, no DMA call (strict mocks).
@@ -1417,26 +1564,38 @@ void Ut_Usart_Set_DataConfig_DmaInvalidStream_Error( void )
 {
     usart_DataConfig_t dataConfig = Ut_Usart_Get_DataConfig( USART_XFER_MODE_DMA, UT_USART_RX_SIZE );
 
-    dataConfig.RxDmaChannelId = dataConfig.TxDmaChannelId;
+    dataConfig.TxDma = USART_TX_DMA_UNUSED;
     TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
 
-    dataConfig = Ut_Usart_Get_DataConfig( USART_XFER_MODE_DMA, UT_USART_RX_SIZE );
-    dataConfig.TxDmaChannelId = USART_DMA_CHANNEL_5;
+    dataConfig       = Ut_Usart_Get_DataConfig( USART_XFER_MODE_DMA, UT_USART_RX_SIZE );
+    dataConfig.RxDma = USART_RX_DMA_UNUSED;
     TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
 
-    dataConfig = Ut_Usart_Get_DataConfig( USART_XFER_MODE_DMA, UT_USART_RX_SIZE );
-    dataConfig.RxDmaPeriphId = USART_DMA_PERIPH_2;
+    dataConfig       = Ut_Usart_Get_DataConfig( USART_XFER_MODE_DMA, UT_USART_RX_SIZE );
+    dataConfig.RxDma = (usart_RxDma_t)UT_USART_TX_DMA;
     TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
 
-    dataConfig = Ut_Usart_Get_DataConfig( USART_XFER_MODE_DMA, UT_USART_RX_SIZE );
-    dataConfig.TxDmaChannelId = USART_DMA_CHANNEL_CNT;
+    dataConfig       = Ut_Usart_Get_DataConfig( USART_XFER_MODE_DMA, UT_USART_RX_SIZE );
+    dataConfig.TxDma = (usart_TxDma_t)UT_USART_RX_DMA;
     TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
 
-    dataConfig = Ut_Usart_Get_DataConfig( USART_XFER_MODE_DMA, UT_USART_RX_SIZE );
-    dataConfig.RxDmaPeriphId = USART_DMA_PERIPH_CNT;
+    dataConfig       = Ut_Usart_Get_DataConfig( USART_XFER_MODE_DMA, UT_USART_RX_SIZE );
+    dataConfig.TxDma = USART_TX_DMA_BUS1_DMA2_STREAM7;
     TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
 
-    dataConfig = Ut_Usart_Get_DataConfig( USART_XFER_MODE_DMA, UT_USART_RX_SIZE );
+    dataConfig       = Ut_Usart_Get_DataConfig( USART_XFER_MODE_DMA, UT_USART_RX_SIZE );
+    dataConfig.RxDma = USART_RX_DMA_BUS1_DMA2_STREAM5;
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+
+    dataConfig       = Ut_Usart_Get_DataConfig( USART_XFER_MODE_DMA, UT_USART_RX_SIZE );
+    dataConfig.TxDma = (usart_TxDma_t)USART_DMA_ENCODE( USART_BUS_2, USART_DMA_PERIPH_1, USART_DMA_CHANNEL_CNT, 4u );
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+
+    dataConfig       = Ut_Usart_Get_DataConfig( USART_XFER_MODE_DMA, UT_USART_RX_SIZE );
+    dataConfig.RxDma = (usart_RxDma_t)USART_DMA_ENCODE( USART_BUS_2, USART_DMA_PERIPH_CNT, USART_DMA_CHANNEL_5, 4u );
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
+
+    dataConfig               = Ut_Usart_Get_DataConfig( USART_XFER_MODE_DMA, UT_USART_RX_SIZE );
     dataConfig.TxDmaPriority = (usart_DmaPriority_t)DMA_PRIORITY_CNT;
     TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Set_DataConfig( UT_USART_BUS, &dataConfig ) );
 }
@@ -2105,16 +2264,17 @@ void Ut_Usart_Dma_SetDataConfig_StreamsInitialized( void )
  * \par Expected results
  * - One stream initialized: DMA2 stream 2, channel 5, circular mode, no HT callback /
  *   interrupt.
+ * - MCUs without USART6 (STM32F410Tx): test ignored.
  */
 void Ut_Usart_Dma_CircularBufferUsart6_CircularStream( void )
 {
+#if defined(USART6)
     usart_DataConfig_t dataConfig = Ut_Usart_Get_DataConfig( USART_XFER_MODE_DMA, UT_USART_RX_SIZE );
 
     dataConfig.TxMode         = USART_XFER_MODE_NONE;
     dataConfig.RxBufferMode   = USART_BUFFER_MODE_CIRCULAR;
     dataConfig.RxHalfCallback = NULL;
-    dataConfig.RxDmaPeriphId  = USART_DMA_PERIPH_2;
-    dataConfig.RxDmaChannelId = USART_DMA_CHANNEL_2;
+    dataConfig.RxDma          = USART_RX_DMA_BUS6_DMA2_STREAM2;
 
     Ut_Usart_Stub_DmaMocks();
     Nvic_Set_PeriphIrq_Prio_ExpectAndReturn( NVIC_PERIPH_IRQ_USART6, UT_USART_PRIO, NVIC_REQUEST_OK );
@@ -2136,6 +2296,49 @@ void Ut_Usart_Dma_CircularBufferUsart6_CircularStream( void )
     Ut_Usart_Stub_PeriphMocks();
     TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Deinit( USART_BUS_6 ) );
     TEST_ASSERT_EQUAL_UINT32( 1u, utUsart_DmaStream[ DMA_PERIPH_2 ][ DMA_STREAM_2 ].InactiveCnt );
+#else
+    TEST_IGNORE_MESSAGE( "MCU without USART6" );
+#endif /* USART6 */
+}
+
+
+/**
+ * \brief   USART2 reception is served also by DMA1 stream 7 on the newer STM32F4 devices.
+ *
+ * \details DMA reception of USART2 (transmission not used) on the second receive stream
+ *          USART_RX_DMA_BUS2_DMA1_STREAM7. Devices where USART2_RX is served by stream 5 only:
+ *          test ignored.
+ *
+ * \par Expected results
+ * - One stream initialized: DMA1 stream 7, channel selection 6.
+ */
+void Ut_Usart_Dma_Usart2SecondRxStream_Initialized( void )
+{
+#if defined(STM32F410Cx) || \
+    defined(STM32F410Rx) || \
+    defined(STM32F410Tx) || \
+    defined(STM32F412Cx) || \
+    defined(STM32F412Rx) || \
+    defined(STM32F412Vx) || \
+    defined(STM32F412Zx) || \
+    defined(STM32F411xE) || \
+    defined(STM32F413xx) || \
+    defined(STM32F423xx)
+    usart_DataConfig_t dataConfig = Ut_Usart_Get_DataConfig( USART_XFER_MODE_DMA, UT_USART_RX_SIZE );
+
+    dataConfig.TxMode = USART_XFER_MODE_NONE;
+    dataConfig.RxDma  = USART_RX_DMA_BUS2_DMA1_STREAM7;
+
+    Ut_Usart_Set_DataConfig( &dataConfig );
+
+    TEST_ASSERT_EQUAL_UINT32( 1u, utUsart_DmaInitCnt );
+    TEST_ASSERT_EQUAL( DMA_PERIPH_1,      utUsart_DmaConfig[ 0u ].DmaPeriphId );
+    TEST_ASSERT_EQUAL( DMA_STREAM_7,      utUsart_DmaConfig[ 0u ].DmaChannel );
+    TEST_ASSERT_EQUAL( DMA_REQ_CHANNEL_6, utUsart_DmaConfig[ 0u ].PeripheralReqId );
+    TEST_ASSERT_EQUAL_UINT32( 6u, USART_DMA_BIT_MASK_DECODE_CHSEL( USART_RX_DMA_BUS2_DMA1_STREAM7 ) );
+#else
+    TEST_IGNORE_MESSAGE( "USART2_RX is served by DMA1 stream 5 only" );
+#endif /* STM32F410 / F411 / F412 / F413 / F423 */
 }
 
 
@@ -2530,13 +2733,15 @@ void Ut_Usart_Poll_TxStopAndDeinit_NoneTxRefused( void )
 /**
  * \brief   Other USART/UART peripherals use their own interrupt, DMA streams and DMA callbacks.
  *
- * \details Every USART/UART of the MCU except USART2 in DMA mode (TX and RX, one shot buffer,
- *          first streams of the request map). Captured USART interrupt without flags, then
- *          DMA callbacks captured from Dma_Init() are called: RX half / complete / error,
- *          TX complete / error. MCUs with USART2 only: test ignored.
+ * \details Every USART/UART of the MCU except USART2 (its items are used by other tests) in DMA
+ *          mode (TX and RX, one shot buffer), every item of the DMA stream lists of the bus,
+ *          items paired by the bus. Captured USART interrupt without flags, then DMA callbacks
+ *          captured from Dma_Init() are called: RX half / complete / error, TX complete /
+ *          error. MCUs with USART2 only: test ignored.
  *
  * \par Expected results
- * - TX / RX stream with the request channel of the peripheral (RM0090 DMA request mapping).
+ * - TX / RX stream with the request channel of the peripheral (RM0090 DMA request mapping),
+ *   the channel selection stored in the list items equals the request map.
  * - Interrupt without flags: no callback.
  * - RX half: RxHalfCallback, RX complete: RxCompleteCallback, RX / TX error: ErrorCallback with
  *   USART_XFER_ERROR_DMA_TRANSFER, TX complete: TC interrupt enabled in CR1 of the peripheral.
@@ -2549,32 +2754,38 @@ void Ut_Usart_Dma_OtherPeriphCallbacks_OwnPeripheralReported( void )
     {
         usart_PeriphId_t      UsartId;
         USART_TypeDef *       PeriphReg;
+        usart_TxDma_t         TxDma;
+        usart_RxDma_t         RxDma;
         usart_DmaPeriphId_t   DmaId;
         usart_DmaChannelId_t  TxStream;
         usart_DmaChannelId_t  RxStream;
-        dma_PeriphReqId_t     ChannelSel;
+        dma_PeriphReqId_t     TxSel;
+        dma_PeriphReqId_t     RxSel;
     }   periphLut[] =
     {
 #ifdef USART1
-        { USART_BUS_1, USART1, USART_DMA_PERIPH_2, USART_DMA_CHANNEL_7, USART_DMA_CHANNEL_2, DMA_REQ_CHANNEL_4 },
+        { USART_BUS_1, USART1, USART_TX_DMA_BUS1_DMA2_STREAM7, USART_RX_DMA_BUS1_DMA2_STREAM2, USART_DMA_PERIPH_2, USART_DMA_CHANNEL_7, USART_DMA_CHANNEL_2, DMA_REQ_CHANNEL_4, DMA_REQ_CHANNEL_4 },
+        { USART_BUS_1, USART1, USART_TX_DMA_BUS1_DMA2_STREAM7, USART_RX_DMA_BUS1_DMA2_STREAM5, USART_DMA_PERIPH_2, USART_DMA_CHANNEL_7, USART_DMA_CHANNEL_5, DMA_REQ_CHANNEL_4, DMA_REQ_CHANNEL_4 },
 #endif /* USART1 */
 #ifdef USART3
-        { USART_BUS_3, USART3, USART_DMA_PERIPH_1, USART_DMA_CHANNEL_3, USART_DMA_CHANNEL_1, DMA_REQ_CHANNEL_4 },
+        { USART_BUS_3, USART3, USART_TX_DMA_BUS3_DMA1_STREAM3, USART_RX_DMA_BUS3_DMA1_STREAM1, USART_DMA_PERIPH_1, USART_DMA_CHANNEL_3, USART_DMA_CHANNEL_1, DMA_REQ_CHANNEL_4, DMA_REQ_CHANNEL_4 },
+        { USART_BUS_3, USART3, USART_TX_DMA_BUS3_DMA1_STREAM4, USART_RX_DMA_BUS3_DMA1_STREAM1, USART_DMA_PERIPH_1, USART_DMA_CHANNEL_4, USART_DMA_CHANNEL_1, DMA_REQ_CHANNEL_7, DMA_REQ_CHANNEL_4 },
 #endif /* USART3 */
 #ifdef UART4
-        { USART_BUS_4, UART4,  USART_DMA_PERIPH_1, USART_DMA_CHANNEL_4, USART_DMA_CHANNEL_2, DMA_REQ_CHANNEL_4 },
+        { USART_BUS_4, UART4,  USART_TX_DMA_BUS4_DMA1_STREAM4, USART_RX_DMA_BUS4_DMA1_STREAM2, USART_DMA_PERIPH_1, USART_DMA_CHANNEL_4, USART_DMA_CHANNEL_2, DMA_REQ_CHANNEL_4, DMA_REQ_CHANNEL_4 },
 #endif /* UART4 */
 #ifdef UART5
-        { USART_BUS_5, UART5,  USART_DMA_PERIPH_1, USART_DMA_CHANNEL_7, USART_DMA_CHANNEL_0, DMA_REQ_CHANNEL_4 },
+        { USART_BUS_5, UART5,  USART_TX_DMA_BUS5_DMA1_STREAM7, USART_RX_DMA_BUS5_DMA1_STREAM0, USART_DMA_PERIPH_1, USART_DMA_CHANNEL_7, USART_DMA_CHANNEL_0, UT_USART_UART5_TX_SEL, DMA_REQ_CHANNEL_4 },
 #endif /* UART5 */
 #ifdef USART6
-        { USART_BUS_6, USART6, USART_DMA_PERIPH_2, USART_DMA_CHANNEL_6, USART_DMA_CHANNEL_1, DMA_REQ_CHANNEL_5 },
+        { USART_BUS_6, USART6, USART_TX_DMA_BUS6_DMA2_STREAM6, USART_RX_DMA_BUS6_DMA2_STREAM1, USART_DMA_PERIPH_2, USART_DMA_CHANNEL_6, USART_DMA_CHANNEL_1, DMA_REQ_CHANNEL_5, DMA_REQ_CHANNEL_5 },
+        { USART_BUS_6, USART6, USART_TX_DMA_BUS6_DMA2_STREAM7, USART_RX_DMA_BUS6_DMA2_STREAM2, USART_DMA_PERIPH_2, USART_DMA_CHANNEL_7, USART_DMA_CHANNEL_2, DMA_REQ_CHANNEL_5, DMA_REQ_CHANNEL_5 },
 #endif /* USART6 */
 #ifdef UART7
-        { USART_BUS_7, UART7,  USART_DMA_PERIPH_1, USART_DMA_CHANNEL_1, USART_DMA_CHANNEL_3, DMA_REQ_CHANNEL_5 },
+        { USART_BUS_7, UART7,  USART_TX_DMA_BUS7_DMA1_STREAM1, USART_RX_DMA_BUS7_DMA1_STREAM3, USART_DMA_PERIPH_1, USART_DMA_CHANNEL_1, USART_DMA_CHANNEL_3, DMA_REQ_CHANNEL_5, DMA_REQ_CHANNEL_5 },
 #endif /* UART7 */
 #ifdef UART8
-        { USART_BUS_8, UART8,  USART_DMA_PERIPH_1, USART_DMA_CHANNEL_0, USART_DMA_CHANNEL_6, DMA_REQ_CHANNEL_5 },
+        { USART_BUS_8, UART8,  USART_TX_DMA_BUS8_DMA1_STREAM0, USART_RX_DMA_BUS8_DMA1_STREAM6, USART_DMA_PERIPH_1, USART_DMA_CHANNEL_0, USART_DMA_CHANNEL_6, DMA_REQ_CHANNEL_5, DMA_REQ_CHANNEL_5 },
 #endif /* UART8 */
     };
 
@@ -2584,10 +2795,8 @@ void Ut_Usart_Dma_OtherPeriphCallbacks_OwnPeripheralReported( void )
         const dma_ConfigStruct_t * txConfig   = NULL;
         const dma_ConfigStruct_t * rxConfig   = NULL;
 
-        dataConfig.TxDmaPeriphId  = periphLut[ idx ].DmaId;
-        dataConfig.TxDmaChannelId = periphLut[ idx ].TxStream;
-        dataConfig.RxDmaPeriphId  = periphLut[ idx ].DmaId;
-        dataConfig.RxDmaChannelId = periphLut[ idx ].RxStream;
+        dataConfig.TxDma = periphLut[ idx ].TxDma;
+        dataConfig.RxDma = periphLut[ idx ].RxDma;
 
         Ut_Usart_Stub_PeriphMocks();
         Ut_Usart_Stub_DmaMocks();
@@ -2616,10 +2825,16 @@ void Ut_Usart_Dma_OtherPeriphCallbacks_OwnPeripheralReported( void )
 
         TEST_ASSERT_NOT_NULL( txConfig );
         TEST_ASSERT_NOT_NULL( rxConfig );
+        TEST_ASSERT_EQUAL( (dma_PeriphId_t)periphLut[ idx ].DmaId,     txConfig->DmaPeriphId );
+        TEST_ASSERT_EQUAL( (dma_PeriphId_t)periphLut[ idx ].DmaId,     rxConfig->DmaPeriphId );
         TEST_ASSERT_EQUAL( (dma_ChannelId_t)periphLut[ idx ].TxStream, txConfig->DmaChannel );
         TEST_ASSERT_EQUAL( (dma_ChannelId_t)periphLut[ idx ].RxStream, rxConfig->DmaChannel );
-        TEST_ASSERT_EQUAL( periphLut[ idx ].ChannelSel, txConfig->PeripheralReqId );
-        TEST_ASSERT_EQUAL( periphLut[ idx ].ChannelSel, rxConfig->PeripheralReqId );
+        TEST_ASSERT_EQUAL( periphLut[ idx ].TxSel, txConfig->PeripheralReqId );
+        TEST_ASSERT_EQUAL( periphLut[ idx ].RxSel, rxConfig->PeripheralReqId );
+
+        /* Channel selection of the list items equals the one used by the request map */
+        TEST_ASSERT_EQUAL_UINT32( (uint32_t)periphLut[ idx ].TxSel >> DMA_SxCR_CHSEL_Pos, USART_DMA_BIT_MASK_DECODE_CHSEL( periphLut[ idx ].TxDma ) );
+        TEST_ASSERT_EQUAL_UINT32( (uint32_t)periphLut[ idx ].RxSel >> DMA_SxCR_CHSEL_Pos, USART_DMA_BIT_MASK_DECODE_CHSEL( periphLut[ idx ].RxDma ) );
 
         periphLut[ idx ].PeriphReg->SR = 0u;
         utUsart_AnyIsr();
@@ -2645,6 +2860,96 @@ void Ut_Usart_Dma_OtherPeriphCallbacks_OwnPeripheralReported( void )
 #else
     TEST_IGNORE_MESSAGE( "MCU with USART2 only" );
 #endif /* USART1 OR USART3 OR UART4 OR UART5 OR USART6 OR UART7 OR UART8 */
+}
+
+
+/**
+ * \brief   Items of the DMA stream lists carry bus, DMA peripheral, stream and channel selection of
+ *          the stream.
+ *
+ * \details Expected values are written as (bus, DMA peripheral index, stream number, channel
+ *          selection number) taken from the DMA request mapping of the STM32F4 reference manuals,
+ *          independently of the encoding macro.
+ *
+ * \par Expected results
+ * - Every transmit and receive item of the USART / UART buses of the MCU carries the expected
+ *   bit-fields.
+ * - Unused items of both lists equal USART_DMA_CODE_UNUSED, the decoding macros return the fields.
+ */
+void Ut_Usart_DmaLists_Items_EncodeBusDmaStreamAndChannelSelection( void )
+{
+    /* USART1 (DMA2, channel selection 4) */
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_1, 1u, 7u, 4u ), USART_TX_DMA_BUS1_DMA2_STREAM7 );
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_1, 1u, 2u, 4u ), USART_RX_DMA_BUS1_DMA2_STREAM2 );
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_1, 1u, 5u, 4u ), USART_RX_DMA_BUS1_DMA2_STREAM5 );
+
+    /* USART2 (DMA1, channel selection 4) */
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_2, 0u, 6u, 4u ), USART_TX_DMA_BUS2_DMA1_STREAM6 );
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_2, 0u, 5u, 4u ), USART_RX_DMA_BUS2_DMA1_STREAM5 );
+#if defined(STM32F410Cx) || \
+    defined(STM32F410Rx) || \
+    defined(STM32F410Tx) || \
+    defined(STM32F412Cx) || \
+    defined(STM32F412Rx) || \
+    defined(STM32F412Vx) || \
+    defined(STM32F412Zx) || \
+    defined(STM32F411xE) || \
+    defined(STM32F413xx) || \
+    defined(STM32F423xx)
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_2, 0u, 7u, 6u ), USART_RX_DMA_BUS2_DMA1_STREAM7 );
+#endif /* STM32F410 / F411 / F412 / F413 / F423 */
+
+#if defined(USART3)
+    /* USART3 (DMA1, channel selection 4, TX stream 4 with channel selection 7) */
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_3, 0u, 3u, 4u ), USART_TX_DMA_BUS3_DMA1_STREAM3 );
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_3, 0u, 4u, 7u ), USART_TX_DMA_BUS3_DMA1_STREAM4 );
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_3, 0u, 1u, 4u ), USART_RX_DMA_BUS3_DMA1_STREAM1 );
+#endif /* USART3 */
+
+#if defined(UART4)
+    /* UART4 (DMA1, channel selection 4) */
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_4, 0u, 4u, 4u ), USART_TX_DMA_BUS4_DMA1_STREAM4 );
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_4, 0u, 2u, 4u ), USART_RX_DMA_BUS4_DMA1_STREAM2 );
+#endif /* UART4 */
+
+#if defined(UART5)
+    /* UART5 (DMA1, channel selection 4, TX channel selection 8 on STM32F413 / STM32F423) */
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_5, 0u, 7u, UT_USART_UART5_TX_CHSEL ), USART_TX_DMA_BUS5_DMA1_STREAM7 );
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_5, 0u, 0u, 4u ), USART_RX_DMA_BUS5_DMA1_STREAM0 );
+#endif /* UART5 */
+
+#if defined(USART6)
+    /* USART6 (DMA2, channel selection 5) */
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_6, 1u, 6u, 5u ), USART_TX_DMA_BUS6_DMA2_STREAM6 );
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_6, 1u, 7u, 5u ), USART_TX_DMA_BUS6_DMA2_STREAM7 );
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_6, 1u, 1u, 5u ), USART_RX_DMA_BUS6_DMA2_STREAM1 );
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_6, 1u, 2u, 5u ), USART_RX_DMA_BUS6_DMA2_STREAM2 );
+#endif /* USART6 */
+
+#if defined(UART7)
+    /* UART7 (DMA1, channel selection 5) */
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_7, 0u, 1u, 5u ), USART_TX_DMA_BUS7_DMA1_STREAM1 );
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_7, 0u, 3u, 5u ), USART_RX_DMA_BUS7_DMA1_STREAM3 );
+#endif /* UART7 */
+
+#if defined(UART8)
+    /* UART8 (DMA1, channel selection 5) */
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_8, 0u, 0u, 5u ), USART_TX_DMA_BUS8_DMA1_STREAM0 );
+    TEST_ASSERT_EQUAL_HEX32( UT_USART_DMA_CODE( USART_BUS_8, 0u, 6u, 5u ), USART_RX_DMA_BUS8_DMA1_STREAM6 );
+#endif /* UART8 */
+
+    /* Decoding of the fields */
+    TEST_ASSERT_EQUAL_UINT32( USART_BUS_1,        USART_DMA_BIT_MASK_DECODE_PERIPH( USART_RX_DMA_BUS1_DMA2_STREAM5 ) );
+    TEST_ASSERT_EQUAL_UINT32( USART_DMA_PERIPH_2, USART_DMA_BIT_MASK_DECODE_DMA( USART_RX_DMA_BUS1_DMA2_STREAM5 ) );
+    TEST_ASSERT_EQUAL_UINT32( USART_DMA_CHANNEL_5, USART_DMA_BIT_MASK_DECODE_STREAM( USART_RX_DMA_BUS1_DMA2_STREAM5 ) );
+    TEST_ASSERT_EQUAL_UINT32( 4u,                 USART_DMA_BIT_MASK_DECODE_CHSEL( USART_RX_DMA_BUS1_DMA2_STREAM5 ) );
+
+    /* Unused stream */
+    TEST_ASSERT_EQUAL_HEX32( USART_DMA_CODE_UNUSED, USART_TX_DMA_UNUSED );
+    TEST_ASSERT_EQUAL_HEX32( USART_DMA_CODE_UNUSED, USART_RX_DMA_UNUSED );
+    TEST_ASSERT_EQUAL_UINT32( USART_BUS_CNT,         USART_DMA_BIT_MASK_DECODE_PERIPH( USART_TX_DMA_UNUSED ) );
+    TEST_ASSERT_EQUAL_UINT32( USART_DMA_PERIPH_CNT,  USART_DMA_BIT_MASK_DECODE_DMA( USART_TX_DMA_UNUSED ) );
+    TEST_ASSERT_EQUAL_UINT32( USART_DMA_CHANNEL_CNT, USART_DMA_BIT_MASK_DECODE_STREAM( USART_TX_DMA_UNUSED ) );
 }
 
 /* ========================== LOCAL FUNCTIONS =============================== */
@@ -2767,11 +3072,9 @@ static usart_DataConfig_t Ut_Usart_Get_DataConfig( usart_XferMode_t xferMode, us
     dataConfig.RxBufferSize       = rxSize;
     dataConfig.RxBufferMode       = USART_BUFFER_MODE_ONE_SHOT;
     dataConfig.RxEndMode          = USART_RX_END_NONE;
-    dataConfig.TxDmaPeriphId      = USART_DMA_PERIPH_1;
-    dataConfig.TxDmaChannelId     = USART_DMA_CHANNEL_6;
+    dataConfig.TxDma              = UT_USART_TX_DMA;
     dataConfig.TxDmaPriority      = USART_DMA_PRIORITY_LOW;
-    dataConfig.RxDmaPeriphId      = USART_DMA_PERIPH_1;
-    dataConfig.RxDmaChannelId     = USART_DMA_CHANNEL_5;
+    dataConfig.RxDma              = UT_USART_RX_DMA;
     dataConfig.RxDmaPriority      = USART_DMA_PRIORITY_HIGH;
     dataConfig.IrqPriority        = UT_USART_PRIO;
     dataConfig.TxCompleteCallback = Ut_Usart_TxCompleteCallback;

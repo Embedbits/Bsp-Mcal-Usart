@@ -16,7 +16,7 @@
  *
  * Used resources (see board configuration below):
  * - IT_USART_BUS, TX pin IT_USART_TX_PIN - not connected on the board
- * - DMA streams IT_USART_DMA_TX_STREAM / IT_USART_DMA_RX_STREAM of IT_USART_DMA (DMA mode)
+ * - DMA streams IT_USART_DMA_TX / IT_USART_DMA_RX (items of the DMA stream lists of the bus, DMA mode)
  */
 
 /* ============================= INCLUDES =================================== */
@@ -60,10 +60,9 @@ static void     It_Usart_ErrorCallback      ( usart_XferErrorId_t errorId );
     #define IT_USART_RCC                    ( RCC_PERIPH_USART2 )
     #define IT_USART_TX_PIN                 ( USART_TX_PIN_BUS2_PA2 )
 
-    /** DMA streams of USART2 (RM0090) */
-    #define IT_USART_DMA                    ( DMA_PERIPH_1 )
-    #define IT_USART_DMA_TX_STREAM          ( USART_DMA_CHANNEL_6 )
-    #define IT_USART_DMA_RX_STREAM          ( USART_DMA_CHANNEL_5 )
+    /** DMA streams of USART2 (RM0090: DMA1 stream 6 / 5, channel selection 4) */
+    #define IT_USART_DMA_TX                 ( USART_TX_DMA_BUS2_DMA1_STREAM6 )
+    #define IT_USART_DMA_RX                 ( USART_RX_DMA_BUS2_DMA1_STREAM5 )
 
 #elif defined(IT_BOARD_STM32F401xE) || \
       defined(IT_BOARD_STM32F411xE) || \
@@ -75,17 +74,17 @@ static void     It_Usart_ErrorCallback      ( usart_XferErrorId_t errorId );
     #define IT_USART_RCC                    ( RCC_PERIPH_USART1 )
     #define IT_USART_TX_PIN                 ( USART_TX_PIN_BUS1_PA9 )
 
-    /** DMA streams of USART1 (RM0368 / RM0383 / RM0390) */
-    #define IT_USART_DMA                    ( DMA_PERIPH_2 )
-    #define IT_USART_DMA_TX_STREAM          ( USART_DMA_CHANNEL_7 )
-    #define IT_USART_DMA_RX_STREAM          ( USART_DMA_CHANNEL_2 )
+    /** DMA streams of USART1 (RM0368 / RM0383 / RM0390: DMA2 stream 7 / 2, channel selection 4) */
+    #define IT_USART_DMA_TX                 ( USART_TX_DMA_BUS1_DMA2_STREAM7 )
+    #define IT_USART_DMA_RX                 ( USART_RX_DMA_BUS1_DMA2_STREAM2 )
 
 #else
     #error "Board of Usart integration tests is not defined (INTEGRATION_TEST_BOARD)."
 #endif
 
-/** DMA peripheral of the USART streams (data handling configuration) */
-#define IT_USART_DMA_PERIPH                 ( (usart_DmaPeriphId_t)IT_USART_DMA )
+/** DMA peripheral and stream of the receive stream (decoded from the item of the stream list) */
+#define IT_USART_DMA_RX_PERIPH              ( (dma_PeriphId_t)USART_DMA_BIT_MASK_DECODE_DMA( IT_USART_DMA_RX ) )
+#define IT_USART_DMA_RX_STREAM              ( (dma_ChannelId_t)USART_DMA_BIT_MASK_DECODE_STREAM( IT_USART_DMA_RX ) )
 
 /** Baud rate [Bd] */
 #define IT_USART_BAUDRATE                   ( 115200u )
@@ -718,12 +717,12 @@ void It_Usart_Deinit_DmaReception_StreamReleased( void )
     It_Usart_Init( USART_XFER_MODE_DMA, USART_XFER_MODE_DMA, IT_USART_BUF_SIZE, USART_BUFFER_MODE_ONE_SHOT, USART_RX_END_NONE );
 
     TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Set_RxStart( IT_USART_BUS ) );
-    TEST_ASSERT_EQUAL( DMA_REQUEST_OK, Dma_Get_TransferState( IT_USART_DMA, (dma_ChannelId_t)IT_USART_DMA_RX_STREAM, &xferState ) );
+    TEST_ASSERT_EQUAL( DMA_REQUEST_OK, Dma_Get_TransferState( IT_USART_DMA_RX_PERIPH, IT_USART_DMA_RX_STREAM, &xferState ) );
     TEST_ASSERT_EQUAL( DMA_FUNCTION_ACTIVE, xferState );
 
     TEST_ASSERT_EQUAL( USART_REQUEST_OK, Usart_Deinit( IT_USART_BUS ) );
 
-    TEST_ASSERT_EQUAL( DMA_REQUEST_OK, Dma_Get_TransferState( IT_USART_DMA, (dma_ChannelId_t)IT_USART_DMA_RX_STREAM, &xferState ) );
+    TEST_ASSERT_EQUAL( DMA_REQUEST_OK, Dma_Get_TransferState( IT_USART_DMA_RX_PERIPH, IT_USART_DMA_RX_STREAM, &xferState ) );
     TEST_ASSERT_EQUAL( DMA_FUNCTION_INACTIVE, xferState );
     TEST_ASSERT_EQUAL( RCC_REQUEST_OK, Rcc_Get_PeriphState( IT_USART_RCC, &clockState ) );
     TEST_ASSERT_EQUAL( RCC_FUNCTION_INACTIVE, clockState );
@@ -779,11 +778,9 @@ static void It_Usart_Init( usart_XferMode_t txMode, usart_XferMode_t rxMode, usa
     itUsart_DataConfig.RxBufferSize       = rxSize;
     itUsart_DataConfig.RxBufferMode       = bufferMode;
     itUsart_DataConfig.RxEndMode          = rxEndMode;
-    itUsart_DataConfig.TxDmaPeriphId      = IT_USART_DMA_PERIPH;
-    itUsart_DataConfig.TxDmaChannelId     = IT_USART_DMA_TX_STREAM;
+    itUsart_DataConfig.TxDma              = IT_USART_DMA_TX;
     itUsart_DataConfig.TxDmaPriority      = USART_DMA_PRIORITY_LOW;
-    itUsart_DataConfig.RxDmaPeriphId      = IT_USART_DMA_PERIPH;
-    itUsart_DataConfig.RxDmaChannelId     = IT_USART_DMA_RX_STREAM;
+    itUsart_DataConfig.RxDma              = IT_USART_DMA_RX;
     itUsart_DataConfig.RxDmaPriority      = USART_DMA_PRIORITY_HIGH;
     itUsart_DataConfig.IrqPriority        = IT_USART_IRQ_PRIO;
     itUsart_DataConfig.TxCompleteCallback = It_Usart_TxCompleteCallback;

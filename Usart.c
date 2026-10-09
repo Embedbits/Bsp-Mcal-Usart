@@ -299,6 +299,28 @@ usart_RequestState_t Usart_Init( usart_BusConfig_t * const usartConfig )
             /* TX pin configuration is not used */
         }
 
+        if( ( USART_REQUEST_ERROR                                              != retState               ) &&
+            ( USART_CTS_PIN_UNUSED                                             != usartConfig->BusCtsPin ) &&
+            ( (uint32_t)USART_BIT_MASK_DECODE_PERIPH( usartConfig->BusCtsPin ) == (uint32_t)usartId ) )
+        {
+            retState = Usart_InitCtsGpio( usartConfig->BusCtsPin );
+        }
+        else
+        {
+            /* CTS pin configuration is not used */
+        }
+
+        if( ( USART_REQUEST_ERROR                                              != retState               ) &&
+            ( USART_RTS_PIN_UNUSED                                             != usartConfig->BusRtsPin ) &&
+            ( (uint32_t)USART_BIT_MASK_DECODE_PERIPH( usartConfig->BusRtsPin ) == (uint32_t)usartId ) )
+        {
+            retState = Usart_InitRtsGpio( usartConfig->BusRtsPin );
+        }
+        else
+        {
+            /* RTS pin configuration is not used */
+        }
+
         /* STM32F4 has no Driver Enable (DE) pin - BusDePin is not used, DE mode is rejected below */
 
         /*------------ USART peripheral initialization section ---------------*/
@@ -522,6 +544,8 @@ usart_RequestState_t Usart_Get_DefaultConfig( usart_BusConfig_t* usartConfig )
         usartConfig->BusRxPin             = USART_RX_PIN_UNUSED;
         usartConfig->BusTxPin             = USART_TX_PIN_UNUSED;
         usartConfig->BusDePin             = USART_DE_PIN_UNUSED;
+        usartConfig->BusCtsPin            = USART_CTS_PIN_UNUSED;
+        usartConfig->BusRtsPin            = USART_RTS_PIN_UNUSED;
 
         returnState = USART_REQUEST_OK;
     }
@@ -2961,6 +2985,59 @@ usart_RequestState_t Usart_InitDeGpio( usart_DePin_t pinId )
     ( void ) pinId;
 
     return ( USART_REQUEST_ERROR );
+}
+
+
+/**
+ * \brief Initializes GPIO Clear To Send (CTS) pin used by peripheral
+ *
+ * Pin is configured in alternate function mode with pull-up (inactive level of
+ * not connected line).
+ *
+ * \param pinId [in]: Pin identification
+ * \return State of request execution. Returns "OK" if request was success,
+ *         otherwise return error.
+ */
+usart_RequestState_t Usart_InitCtsGpio( usart_CtsPin_t pinId )
+{
+    usart_RequestState_t retValue = USART_REQUEST_ERROR;
+
+    if( USART_CTS_PIN_UNUSED != pinId )
+    {
+        retValue = Usart_InitGpioPin( (uint32_t)pinId, GPIO_PIN_OUTPUT_PUSHPULL, GPIO_PIN_PULL_UP );
+    }
+    else
+    {
+        retValue = USART_REQUEST_ERROR;
+    }
+
+    return ( retValue );
+}
+
+
+/**
+ * \brief Initializes GPIO Request To Send (RTS) pin used by peripheral
+ *
+ * Pin is configured in alternate function push-pull mode without pull resistor.
+ *
+ * \param pinId [in]: Pin identification
+ * \return State of request execution. Returns "OK" if request was success,
+ *         otherwise return error.
+ */
+usart_RequestState_t Usart_InitRtsGpio( usart_RtsPin_t pinId )
+{
+    usart_RequestState_t retValue = USART_REQUEST_ERROR;
+
+    if( USART_RTS_PIN_UNUSED != pinId )
+    {
+        retValue = Usart_InitGpioPin( (uint32_t)pinId, GPIO_PIN_OUTPUT_PUSHPULL, GPIO_PIN_PULL_NONE );
+    }
+    else
+    {
+        retValue = USART_REQUEST_ERROR;
+    }
+
+    return ( retValue );
 }
 
 /* =========================== LOCAL FUNCTIONS ============================== */
