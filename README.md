@@ -14,10 +14,70 @@ It supports initialization, configuration of communication parameters, DMA trans
 - RX timeout configuration
 - Pin levels management
 - Direct register access for TX/RX
-- Blocking and non-blocking transfers
-- DMA-based data transfers (TX/RX)
-- Full interrupt handling support with callbacks
-- GPIO pin initialization for USART signals
+- Data handling of buffers - transmission and reception configured independently in **DMA**,
+  **ISR** (USART interrupt) or **POLL** (`Usart_Task()`) mode, one shot or circular receive buffer,
+  end of message detection by idle line, callbacks for transmission complete, half / full receive
+  buffer, end of message and errors (`usart_DataConfig_t`)
+- Interrupt and DMA request control
+- GPIO pin initialization for USART signals (encoded pins `USART_*_PIN_BUSx_Pyy`,
+  `USART_*_PIN_LPBUS1_Pyy`, `USART_*_PIN_UNUSED`)
+
+The public interface is identical with the STM32H5 / STM32F4 USART modules (applications and
+middlewares, e.g. ModBus / CRSF, use the same interface). The STM32H7 implementation is based on
+the STM32G4 module (same USART / LPUART IP).
+
+### STM32H7 specifics
+
+- Peripherals: USART1, USART2, USART3, UART4, UART5, USART6, UART7, UART8 (`USART_BUS_1` ...
+  `USART_BUS_8`), UART9 / USART10 (`USART_BUS_9` / `USART_BUS_10`, only STM32H72x / H73x / H7A3 /
+  H7B0 / H7B3) and LPUART1 (`USART_BUS_LPUART1`). Pin enumerations are generated from ST open pin
+  data (STM32_open_pin_data) - pins missing on some device lines are guarded by the device macros;
+  a pin with different alternate function on different device lines keeps one name.
+- Kernel clocks (RCC module): USART1 / USART6 / UART9 / USART10 - PCLK2, USART2 / USART3 / UART4 /
+  UART5 / UART7 / UART8 - PCLK1, LPUART1 - PCLK4 (D3 / SmartRun domain).
+- All features of the USART interface are available: receiver timeout (end of message also by
+  `USART_RX_END_TIMEOUT`), Driver Enable (DE) with its pins, polarity and assertion / deassertion
+  times, pin level inversion, 7 / 8 / 9-bit words, kernel clock prescaler (PRESC) selected by the
+  module for the required baud-rate. FIFO mode is not used.
+- LPUART1 limitations (low-power UART IP):
+  - over-sampling by 16 only - `Usart_Set_Oversampling()` accepts `USART_OVERSAMPLING_16`,
+    `Usart_Get_Oversampling()` returns it (the default configuration uses over-sampling by 8 and
+    has to be changed for LPUART1),
+  - 1 or 2 stop bits,
+  - no receiver timeout - `RxTimeoutValue` shall be 0, `Usart_Set_RxTimeoutActive()`,
+    `Usart_Set_RxTimeoutIrqActive()` and `USART_RX_END_TIMEOUT` return error,
+  - baud-rate divider LPUARTDIV = 256 x kernel clock / baud-rate (20-bit BRR, kernel clock 3 -
+    4096 x baud-rate),
+  - DE assertion / deassertion times are expressed in LPUART kernel clock cycles,
+  - no DMA mode - LPUART1 requests are routed by DMAMUX2 to BDMA (not supported by the Dma
+    module), `USART_XFER_MODE_DMA` is refused (ISR / POLL mode available).
+- LPUART errata "Possible LPUART transmitter issue when using low BRR[15:0] value" (STM32G4
+  ES0430 2.17.1, same LPUART IP - to be confirmed for STM32H7 by the errata audit AB#844):
+  baud-rates with non-integer ratio of kernel clock and baud-rate in the range 3 - 4 (LPUARTDIV
+  0x301 - 0x3FF) are refused by `Usart_Set_Baudrate()`.
+- DMA: `usart_DmaPeriphId_t` / `usart_DmaChannelId_t` select any free stream of DMA1 / DMA2
+  (`USART_DMA_CHANNEL_0` ... `USART_DMA_CHANNEL_7` = streams 0 - 7), the DMAMUX1 request of the
+  peripheral is selected by the module (Dma module, direct mode, 8-bit). Transmit and receive
+  direction shall use different streams. Buffers shall be accessible by DMA1 / DMA2 (AXI SRAM,
+  SRAM1 - SRAM4 - not DTCM / ITCM).
+- Reception error flags are cleared by the interrupt clear register (ICR). DMA errors are reported
+  as `USART_XFER_ERROR_DMA_TRANSFER`.
+- Interrupt service routines end without DSB (Cortex-M4 erratum 838869 of STM32G4 does not apply
+  to Cortex-M7).
+- Defects of the STM32H5 reference implementation fixed in this implementation (taken over from
+  STM32G4): NULL output pointer of `Usart_Get_Oversampling()` / `Usart_Get_RxTimeoutState()` /
+  `Usart_Get_PinLevels()` (AB#968), overflow of the DE time calculation at high baud-rates and
+  division by zero without configured baud-rate (AB#970), `USART_RX_TIMEOUT_MAX` refused by
+  `Usart_Set_RxTimeoutActive()` (AB#971).
+
+**STM32H7R3 / H7R7 / H7S3 / H7S7** (Ral family STM32H7RS, macro `STM32H7RS`): no DMA1 / DMA2 streams - DMA data
+handling uses GPDMA1 / HPDMA1 channels (`Gpdma_Lib`, `Usart_Dma.c` of the STM32H5 module compiled under `STM32H7RS`,
+GPDMA1 requests `GPDMA_REQ_<USART>_RX / _TX`, LPUART1 included). Peripherals USART1 - USART3, UART4 / UART5 / UART7 /
+UART8, LPUART1; pin enumerations from the STM32H7RS open pin data. Unit tests: the STM32H7 tests run on STM32H7R / H7S
+except the DMA stream tests (ignored there - the STM32H5 module has no unit tests of the GPDMA data handling), the
+GPDMA data handling is verified by the integration tests on NUCLEO-H7S3L8 with the IT phase.
+
+Not yet tested on hardware (integration tests prepared for STM32H7 Nucleo boards).
 
 ---
 
@@ -69,7 +129,7 @@ It supports initialization, configuration of communication parameters, DMA trans
 ### Pin Management
 - `usart_RequestState_t    Usart_Set_PinLevels(usart_PeriphId_t usartId, usart_RxPinLevel_t rxPinLevels, usart_TxPinLevel_t txPinLevels);`
 - `usart_RequestState_t    Usart_Get_PinLevels(usart_PeriphId_t usartId, usart_RxPinLevel_t * const rxPinLevels, usart_TxPinLevel_t * const txPinLevels);`
-- `usart_RequestState_t    Usart_Get_TxRegisterAddr(usart_PeriphId_t usartId, usart_RxRegAddr_t * const regAddr);`
+- `usart_RequestState_t    Usart_Get_TxRegisterAddr(usart_PeriphId_t usartId, usart_TxRegAddr_t * const regAddr);`
 - `usart_RequestState_t    Usart_Get_RxRegisterAddr(usart_PeriphId_t usartId, usart_RxRegAddr_t * const regAddr);`
 
 ### Data Transfer
@@ -78,62 +138,41 @@ It supports initialization, configuration of communication parameters, DMA trans
 
 ---
 
-## DMA Support
-- `usart_RequestState_t    Usart_Init_Dma(usart_PeriphId_t usartId, usart_DmaConfig_t * const dmaConfig);`
-- TX:
-  - `usart_RequestState_t    Usart_Set_DmaTxStart(usart_PeriphId_t usartId, usart_TxDataCnt_t bytesCnt, usart_TxData_t * const dataBuff);`
-  - `usart_RequestState_t    Usart_Set_DmaTxStop(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_DmaTxRemainingCnt(usart_PeriphId_t usartId, usart_TxDataCnt_t * const bytesCnt);`
-- RX:
-  - `usart_RequestState_t    Usart_Set_DmaRxStart(usart_PeriphId_t usartId, usart_RxDataCnt_t bytesCnt, usart_RxData_t * const dataBuff);`
-  - `usart_RequestState_t    Usart_Set_DmaRxStop(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_DmaRxRemainingCnt(usart_PeriphId_t usartId, usart_RxDataCnt_t * const bytesCnt);`
-- DMA Requests:
-  - `usart_RequestState_t    Usart_Set_DmaTxRequestActive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Set_DmaTxRequestInactive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_DmaTxReqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
-  - `usart_RequestState_t    Usart_Set_DmaRxRequestActive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Set_DmaRxRequestInactive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_DmaRxReqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
+## Data Handling (DMA / ISR / POLL)
+- `usart_RequestState_t    Usart_Set_DataConfig(usart_PeriphId_t usartId, const usart_DataConfig_t * const dataConfig);`
+- `usart_RequestState_t    Usart_Get_DataConfig(usart_PeriphId_t usartId, usart_DataConfig_t * const dataConfig);`
+- `usart_RequestState_t    Usart_Set_TxStart(usart_PeriphId_t usartId, const usart_TxData_t * const txData, usart_TxDataCnt_t txSize);`
+- `usart_RequestState_t    Usart_Set_TxStop(usart_PeriphId_t usartId);`
+- `usart_RequestState_t    Usart_Get_TxState(usart_PeriphId_t usartId, usart_FunctionState_t * const txState);`
+- `usart_RequestState_t    Usart_Set_RxStart(usart_PeriphId_t usartId);`
+- `usart_RequestState_t    Usart_Set_RxStop(usart_PeriphId_t usartId);`
+- `usart_RequestState_t    Usart_Get_RxState(usart_PeriphId_t usartId, usart_FunctionState_t * const rxState);`
+- `usart_RequestState_t    Usart_Get_RxCount(usart_PeriphId_t usartId, usart_RxDataCnt_t * const rxCnt);`
+
+Data handling is configured by `usart_BusConfig_t::DataConfig` in `Usart_Init()` or later by
+`Usart_Set_DataConfig()`. POLL mode requires periodic call of `Usart_Task()`.
 
 ---
 
-## Interrupts and Callbacks
+## DMA Requests
+- `usart_RequestState_t    Usart_Set_DmaTxRequestActive(usart_PeriphId_t usartId);`
+- `usart_RequestState_t    Usart_Set_DmaTxRequestInactive(usart_PeriphId_t usartId);`
+- `usart_RequestState_t    Usart_Get_DmaTxReqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
+- `usart_RequestState_t    Usart_Set_DmaRxRequestActive(usart_PeriphId_t usartId);`
+- `usart_RequestState_t    Usart_Set_DmaRxRequestInactive(usart_PeriphId_t usartId);`
+- `usart_RequestState_t    Usart_Get_DmaRxReqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
+
+---
+
+## Interrupts
 - General:
   - `usart_RequestState_t    Usart_Set_InterruptsActive(usart_PeriphId_t usartBus);`
   - `usart_RequestState_t    Usart_Set_InterruptsInactive(usart_PeriphId_t usartBus);`
   - `usart_RequestState_t    Usart_Set_IrqPriority(usart_PeriphId_t usartId, usart_IrqPrio_t irqPrio);`
   - `usart_RequestState_t    Usart_Get_IrqPriority(usart_PeriphId_t usartId, usart_IrqPrio_t * const irqPrio);`
-- RX Not Empty:
-  - `usart_RequestState_t    Usart_Set_RxNotEmptyIrqActive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Set_RxNotEmptyIrqInactive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_RxNotEmptyIrqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
-  - `usart_RequestState_t    Usart_Set_RxNotEmptyIsrCallback(usart_PeriphId_t usartId, usart_RxNeIrqCallback_t * const callback);`
-- TX Empty:
-  - `usart_RequestState_t    Usart_Set_TxEmptyIrqActive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Set_TxEmptyIrqInactive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_TxEmptyIrqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
-  - `usart_RequestState_t    Usart_Set_TxEmptyIsrCallback(usart_PeriphId_t usartId, usart_TxeIrqCallback_t * const callback);`
-- TX Complete:
-  - `usart_RequestState_t    Usart_Set_TxCompleteIrqActive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Set_TxCompleteIrqInactive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_TxCompleteIrqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
-  - `usart_RequestState_t    Usart_Set_TxCompleteIsrCallback(usart_PeriphId_t usartId, usart_TcIrqCallback_t * const callback);`
-- Idle:
-  - `usart_RequestState_t    Usart_Set_IdleIrqActive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Set_IdleIrqInactive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_IdleIrqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
-  - `usart_RequestState_t    Usart_Set_IdleIsrCallback(usart_PeriphId_t usartId, usart_IdleIrqCallback_t * const callback);`
-- RX Timeout:
-  - `usart_RequestState_t    Usart_Set_RxTimeoutIrqActive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Set_RxTimeoutIrqInactive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_RxTimeoutIrqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
-  - `usart_RequestState_t    Usart_Set_RxTimeoutIsrCallback(usart_PeriphId_t usartId, usart_RxTimeoutIrqCallback_t * const callback);`
-- Error:
-  - `usart_RequestState_t    Usart_Set_ErrorIrqActive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Set_ErrorIrqInactive(usart_PeriphId_t usartId);`
-  - `usart_RequestState_t    Usart_Get_ErrorIrqState(usart_PeriphId_t usartId, usart_FlagState_t * const reqState);`
-  - `usart_RequestState_t    Usart_Set_ErrorIsrCallback(usart_PeriphId_t usartId, usart_ErrIrqCallback_t * const callback);`
+- Interrupt sources (`Usart_Set_<Irq>IrqActive / Usart_Set_<Irq>IrqInactive / Usart_Get_<Irq>IrqState`,
+  `<Irq>` = `RxNotEmpty`, `TxEmpty`, `TxComplete`, `Idle`, `RxTimeout`, `Error`). The USART interrupt
+  handler serves the data handling - these functions are intended for diagnostics.
 
 ---
 
@@ -141,6 +180,11 @@ It supports initialization, configuration of communication parameters, DMA trans
 - `usart_RequestState_t    Usart_InitRxGpio(usart_RxPin_t pinId);`
 - `usart_RequestState_t    Usart_InitTxGpio(usart_TxPin_t pinId);`
 - `usart_RequestState_t    Usart_InitDeGpio(usart_DePin_t pinId);`
+- `usart_RequestState_t    Usart_InitCtsGpio(usart_CtsPin_t pinId);`
+- `usart_RequestState_t    Usart_InitRtsGpio(usart_RtsPin_t pinId);`
+
+The pins of the hardware flow control are configured by `BusCtsPin` (CTS input) and `BusRtsPin` (RTS output)
+of `usart_BusConfig_t`; the RTS output has the same pads and alternate functions as the Driver Enable output (`BusDePin`).
 
 ---
 
