@@ -165,6 +165,12 @@ of `usart_BusConfig_t` (STM32F4 has no Driver Enable output, `BusDePin` is not u
 
 ---
 
+## Integration Tests
+
+`Tests/IntegrationTests` run on a board (EmBi_Platform `CMake/IntegrationTesting`). The single bus tests need no wiring (single wire half-duplex mode, the TX pin is not connected). The pair tests use two crossed U(S)ARTs (TX of A -> RX of B, TX of B -> RX of A): polling transfer in both directions, interrupt and DMA full duplex exchange (DMA at 921600 Bd) and end of message (idle line) with the byte count; pins and DMA streams per board in `ItTest_Usart.c` (NUCLEO-F411RE: USART1 PA9 / PA10 <-> USART6 PA11 / PA12, NUCLEO-F446RE: UART4 PC10 / PC11 <-> UART5 PC12 / PD2). The wiring is the fixture feature `UART_PAIR` of the board: on a board with a fixture without it (and on a board without a known wiring, eg. NUCLEO-F413ZH) the pair tests are ignored, a board without a fixture is expected to be wired.
+
+---
+
 ## 🛠 CMake Integration
 
 1. Include `Usart_Lib` in your CMake library.
