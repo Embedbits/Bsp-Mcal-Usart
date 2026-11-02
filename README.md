@@ -183,6 +183,19 @@ of `usart_BusConfig_t`; the RTS output has the same pads and alternate functions
 
 ---
 
+## Integration Tests
+
+`Tests/IntegrationTests/ItTest_Usart.c` runs on a board (EmBi_Platform `CMake/IntegrationTesting`, boards named by the MCU):
+
+- Single bus tests: no external wiring, the USART / LPUART1 works in single wire half-duplex mode (pull-up of the TX pin).
+- Pair tests (`UART_PAIR`): two U(S)ARTs of the board are crossed (TX of A -> RX of B and TX of B -> RX of A): polling transfer in both directions, interrupt and DMA full duplex exchange (DMA at 921600 Bd), end of message (idle line) with the byte count.
+- Loop tests (`UART_LOOP`): TX of a U(S)ART is wired to its own RX: polling, interrupt and DMA (921600 Bd) transfer.
+- NUCLEO-L4R5ZI (the only STM32L4 board of the inventory): pair USART3 TX PC10 -> UART5 RX PD2 and UART5 TX PC12 -> USART3 RX PC11, loop USART2 PA2 -> PA3. Other boards have no known wiring - the pair / loop tests are ignored there.
+- The wiring is the fixture feature `UART_PAIR` / `UART_LOOP` of the board: on a board with a fixture without it the tests are ignored (`ItUsart_RequirePair()`, `ItUsart_RequireLoop()`); a board without a fixture is expected to be wired when the test set knows a wiring of the board.
+- The UART of STM32L4 has no receive FIFO: while the debug probe halts the core to read the result mailbox the received bytes of the polling / interrupt mode can be lost (overrun). The pair / loop tests repeat a disturbed transfer (at most 3 attempts), other errors and differences of data fail the test; DMA transfers are not affected.
+
+---
+
 ## 🛠 CMake Integration
 
 1. Include `Usart_Lib` in your CMake library.
