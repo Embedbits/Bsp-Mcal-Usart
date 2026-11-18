@@ -128,6 +128,10 @@ static void It_Usart_ErrorCallback      ( usart_XferErrorId_t errorId );
 /** Maximal count of wait loop iterations (~ hundreds of frames, Usart_Task called) */
 #define IT_USART_WAIT_LOOPS                 ( 2000000u )
 
+/** Maximal count of iterations of the frame delay loop (one iteration takes at least one core clock cycle,
+ *  1000000 cycles cover more than 50 frames at 216 MHz, the delay of the tests is 3 frames) */
+#define IT_USART_DELAY_LOOPS                ( 1000000u )
+
 /** Count of bytes of frame timing measurement */
 #define IT_USART_TIMING_BYTES               ( 50u )
 
@@ -898,7 +902,10 @@ static void It_Usart_Delay_Frames( uint32_t frameCnt )
     const dwt_CounterValue_t startCnt   = Dwt_Get_CycleCounter();
     dwt_CounterValue_t       elapsed    = 0u;
 
-    while( waitCycles > elapsed )
+    for( uint32_t loopIdx = 0u;
+         ( IT_USART_DELAY_LOOPS > loopIdx ) &&
+         ( waitCycles > elapsed );
+         loopIdx++ )
     {
         elapsed = Dwt_Get_CycleCounter() - startCnt;
     }
