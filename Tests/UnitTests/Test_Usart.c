@@ -919,6 +919,29 @@ void Ut_Usart_Set_Baudrate_ZeroBaudrate_ReturnsErrorWithoutWrite( void )
 
 
 /**
+ * \brief   Usart_Set_Baudrate() rejects a kernel clock of 0 Hz (AB#2243).
+ *
+ * \details Kernel clock 0 Hz with RCC_REQUEST_OK (stopped kernel clock source), PRESC preset to 5,
+ *          BRR preset, sets 115200 Bd.
+ *
+ * \par Expected results
+ * - USART_REQUEST_ERROR, PRESC and BRR unchanged.
+ */
+void Ut_Usart_Set_Baudrate_KernelClkZero_ReturnsErrorWithoutWrite( void )
+{
+    utUsart_ClkHz       = 0u;
+    UT_USART_REG->PRESC = 0x5u;
+    UT_USART_REG->BRR   = 0x1234u;
+    Rcc_Get_PeriphClk_StubWithCallback( Ut_Usart_RccGetClkStub );
+
+    TEST_ASSERT_EQUAL( USART_REQUEST_ERROR, Usart_Set_Baudrate( UT_USART_BUS, UT_USART_BAUDRATE ) );
+
+    TEST_ASSERT_EQUAL_HEX32( 0x5u, UT_USART_REG->PRESC );
+    TEST_ASSERT_EQUAL_HEX32( 0x1234u, UT_USART_REG->BRR );
+}
+
+
+/**
  * \brief   Low baud rate selects prescaler to keep BRR in range.
  *
  * \details Kernel clock 64 MHz, oversampling 16. Sets 600 Bd (divider 106667 above

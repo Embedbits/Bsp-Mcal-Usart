@@ -897,8 +897,10 @@ usart_RequestState_t Usart_Set_Baudrate( usart_PeriphId_t usartId, usart_Baudrat
 
         retValue = Usart_Get_Oversampling( usartId, &oversampling );
 
+        /* Kernel clock read and running (a stopped kernel clock source is reported as 0 Hz, AB#2243) */
         if( ( USART_REQUEST_OK == retValue        ) &&
-            ( RCC_REQUEST_OK   == rccRequestState )    )
+            ( RCC_REQUEST_OK   == rccRequestState ) &&
+            ( 0u               <  usartPeriphClk  )    )
         {
             retValue = Usart_Get_ExpectedPrescaler( usartId, usartPeriphClk, oversampling, baudrate, &usartPrescaler );
         }
@@ -5240,24 +5242,36 @@ usart_RequestState_t Usart_Set_XferRxEnd( usart_PeriphId_t usartId )
             /* Count is read before the reception is stopped */
             retState = Usart_Get_RxCount( usartId, &rxCnt );
 
+            /* The idle line is detected on a line which was idle since the reception start as well (the flag is set
+             * one frame after the receiver is enabled) - the end of a message needs received data */
             if( ( USART_REQUEST_OK           == retState                                         ) &&
-                ( USART_BUFFER_MODE_ONE_SHOT == usart_XferContext[ usartId ].Config.RxBufferMode )    )
+                ( USART_BUFFER_MODE_ONE_SHOT == usart_XferContext[ usartId ].Config.RxBufferMode ) &&
+                ( 0u                         == rxCnt                                            )    )
             {
-                retState = Usart_Set_RxStop( usartId );
+                /* No data received yet - not an end of a message, the reception continues */
+                retState = USART_REQUEST_OK;
             }
             else
             {
-                /* Circular buffer - reception continues */
-            }
+                if( ( USART_REQUEST_OK           == retState                                         ) &&
+                    ( USART_BUFFER_MODE_ONE_SHOT == usart_XferContext[ usartId ].Config.RxBufferMode )    )
+                {
+                    retState = Usart_Set_RxStop( usartId );
+                }
+                else
+                {
+                    /* Circular buffer - reception continues */
+                }
 
-            if( ( USART_REQUEST_OK == retState                                          ) &&
-                ( USART_NULL_PTR   != usart_XferContext[ usartId ].Config.RxEndCallback )    )
-            {
-                usart_XferContext[ usartId ].Config.RxEndCallback( rxCnt );
-            }
-            else
-            {
-                /* Event is not reported */
+                if( ( USART_REQUEST_OK == retState                                          ) &&
+                    ( USART_NULL_PTR   != usart_XferContext[ usartId ].Config.RxEndCallback )    )
+                {
+                    usart_XferContext[ usartId ].Config.RxEndCallback( rxCnt );
+                }
+                else
+                {
+                    /* Event is not reported */
+                }
             }
         }
         else

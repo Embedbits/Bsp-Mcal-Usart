@@ -188,6 +188,12 @@ of `usart_BusConfig_t`; the RTS output has the same pads and alternate functions
 
 ---
 
+## Integration Tests
+
+`Tests/IntegrationTests` run on a board (EmBi_Platform `CMake/IntegrationTesting`). The single bus tests need no wiring (single wire half-duplex mode). The pair tests cross two U(S)ARTs (TX of A to RX of B and back, fixture feature `UART_PAIR`: UART4 PC10 - UART5 PD2 and UART5 PC12 - UART4 PC11) and the loop tests connect TX to RX of one U(S)ART (fixture feature `UART_LOOP`: USART2 PA2 - PA3 on NUCLEO-H7A3ZI-Q, UART7 PF7 - PF6 on NUCLEO-H723ZG / NUCLEO-H755ZI-Q / NUCLEO-H7S3L8). On a board with a fixture without the feature the pair / loop tests are ignored; a board without a fixture is expected to be wired.
+
+---
+
 ## 🛠 CMake Integration
 
 1. Include `Usart_Lib` in your CMake library.

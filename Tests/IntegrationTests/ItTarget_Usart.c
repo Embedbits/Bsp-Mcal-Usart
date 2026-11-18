@@ -99,11 +99,17 @@ void BspMain( void )
 /**
  * \brief Initialization of the target on every boot (IntegrationTesting_Target.h).
  *
- * Initializes everything the tests of Usart need (clocks, pins, ...).
+ * Initializes everything the tests of Usart need (clocks, pins, ...). The instruction cache is enabled: at the
+ * reset clock (HSI 64 MHz, a board without its supply configuration) the interrupt data handling at 115200 Bd fetches
+ * its code and its constant tables from flash without a cache, the time of the handler then depends on the placement
+ * of the code in flash (a shift of 324 B by another module lost received data, AB#2251).
  */
 void ItTarget_Init( void )
 {
     itTarget_FreezeInDebug();
+
+    /* Code of the interrupt handlers from the cache - timing independent of the placement in flash */
+    SCB_EnableICache();
 
     itTarget_SetFaultHandlers();
 }
