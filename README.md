@@ -168,6 +168,12 @@ of `usart_BusConfig_t`; the RTS output has the same pads and alternate functions
 
 ---
 
+## Integration Tests
+
+`Tests/IntegrationTests` run on a board (EmBi_Platform `CMake/IntegrationTesting`). The single bus tests need no wiring (single wire half-duplex on USART1 PA9, LPUART1 PA2). The pair tests use two crossed U(S)ARTs: USART3 TX PB10 -> UART4 RX PC11 and UART4 TX PC10 -> USART3 RX PB11 (NUCLEO-G474RE / G431RB / G491RE, pins per board in `ItTest_Usart.c`): polling in both directions, interrupt and DMA (921600 Bd) full duplex exchange and the end of a message by the idle line with the byte count. The wiring is the fixture feature `UART_PAIR` of the board: on a board with a fixture without it the 4 pair tests are ignored (`ItUsart_RequirePair()`); a board without a fixture is expected to be wired.
+
+---
+
 ## 🛠 CMake Integration
 
 1. Include `Usart_Lib` in your CMake library.
